@@ -479,6 +479,12 @@
         </svg>
         <span id="theme-label" style="font-size:11px;font-weight:500;">Dark</span>
       </button>
+      <!-- AI API Key Settings Button -->
+      <button onclick="openApiKeyModal()" id="nav-api-key-btn" class="btn-outline" style="padding:6px 11px;font-size:12px;display:flex;align-items:center;gap:6px;" title="Configure AI Service API Key">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1010 0 5 5 0 00-10 0z"/><path d="M12 16v5l3-3"/></svg>
+        <span id="nav-api-key-text" style="font-size:11.5px;font-weight:500;">API Key</span>
+        <span id="nav-api-key-dot" style="width:7px;height:7px;border-radius:50%;background:#eab308;display:inline-block;"></span>
+      </button>
       <button class="btn-outline" style="padding:6px 14px;font-size:12px;" onclick="showPage('paper')">Upload Paper</button>
       <button class="btn-primary" style="padding:6px 14px;font-size:12px;" onclick="showPage('collaborate')">Collaborate</button>
 
@@ -1047,7 +1053,86 @@
 </footer>
 
 <script>
-  const API_KEY = localStorage.getItem('openai_api_key') || "";
+  // Dynamic API Key & Model Management
+  function getActiveApiKey() {
+    return localStorage.getItem('openai_api_key') || "";
+  }
+  function getActiveModel() {
+    return localStorage.getItem('openai_model') || 'gpt-4o-mini';
+  }
+  function updateApiKeyStatusUI() {
+    const key = getActiveApiKey();
+    const btnText = document.getElementById('nav-api-key-text');
+    const btnDot = document.getElementById('nav-api-key-dot');
+    const modalInput = document.getElementById('modal-openai-key-input');
+    const modalSelect = document.getElementById('modal-model-select');
+    const statusInd = document.getElementById('modal-key-status-indicator');
+
+    if (key) {
+      if (btnText) btnText.innerText = 'Key Active';
+      if (btnDot) btnDot.style.background = '#22c55e';
+      if (statusInd) statusInd.innerHTML = `<span style="color:#22c55e;font-weight:600;">✓ Configured (${key.slice(0, 7)}...${key.slice(-4)})</span>`;
+    } else {
+      if (btnText) btnText.innerText = 'Set Key';
+      if (btnDot) btnDot.style.background = '#eab308';
+      if (statusInd) statusInd.innerHTML = `<span style="color:#eab308;font-weight:500;">No API key saved</span>`;
+    }
+
+    if (modalSelect) modalSelect.value = getActiveModel();
+  }
+
+  function openApiKeyModal() {
+    const modal = document.getElementById('api-key-modal');
+    const modalInput = document.getElementById('modal-openai-key-input');
+    if (modalInput) {
+      modalInput.value = getActiveApiKey();
+    }
+    updateApiKeyStatusUI();
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        if (modalInput) modalInput.focus();
+      }, 80);
+    }
+  }
+
+  function closeApiKeyModal() {
+    const modal = document.getElementById('api-key-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function toggleApiKeyVisibility() {
+    const input = document.getElementById('modal-openai-key-input');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  function saveApiKey() {
+    const input = document.getElementById('modal-openai-key-input');
+    const select = document.getElementById('modal-model-select');
+    const val = input ? input.value.trim() : "";
+    const model = select ? select.value : 'gpt-4o-mini';
+
+    if (!val) {
+      showToast("Please enter an OpenAI API key or click Clear.");
+      return;
+    }
+
+    localStorage.setItem('openai_api_key', val);
+    localStorage.setItem('openai_model', model);
+    updateApiKeyStatusUI();
+    closeApiKeyModal();
+    showToast("✓ OpenAI API key saved successfully!");
+  }
+
+  function clearApiKey() {
+    localStorage.removeItem('openai_api_key');
+    const input = document.getElementById('modal-openai-key-input');
+    if (input) input.value = '';
+    updateApiKeyStatusUI();
+    showToast("API key removed.");
+  }
+
   const pages = ['home','research','paper','collaborate','about','features'];
   const navIds = ['home','about','features','research'];
 
@@ -1888,6 +1973,7 @@
     applyAuthState();
     await loadSessionsFromBackend();
     initGoogleIdentityServices();
+    updateApiKeyStatusUI();
   });
 
   let pendingRedirectPage = null;
@@ -2160,6 +2246,49 @@
         paperCardsHtml = `<div style="margin-top:10px;font-size:12px;color:var(--ra-muted);">No open papers found for "${escapeHtml(targetTopic)}". You can try broader keywords.</div>`;
       }
 
+      // Check if OpenAI key is present; if not, provide rich built-in academic synthesis from OpenAlex/ArXiv
+      if (!getActiveApiKey()) {
+        let synthesis = `### 📚 Verified Literature Retrieved: "${escapeHtml(targetTopic)}"\n\n`;
+        synthesis += `I queried **OpenAlex** and **ArXiv** open-science repositories and retrieved **${retrievedPapers.length} peer-reviewed publications** for your inquiry:\n\n`;
+        if (retrievedPapers.length > 0) {
+          retrievedPapers.forEach((p, idx) => {
+            synthesis += `**${idx + 1}. [${p.title}](${p.url})**\n`;
+            synthesis += `- **Authors:** ${p.authors} (${p.year})\n`;
+            synthesis += `- **Venue:** *${p.venue}* • Citations: **${p.citations}**\n`;
+            synthesis += `- **Summary:** ${p.abstract.slice(0, 260)}...\n\n`;
+          });
+          synthesis += `\n---\n*💡 **Real-time AI Chat:** Connect your OpenAI API key in the navbar or via the button below to enable interactive multi-turn dialogue with these papers.*`;
+        } else {
+          synthesis += `No open-access papers were found matching "${escapeHtml(targetTopic)}". You can try broader search keywords.`;
+        }
+
+        const apiKeyNotice = `
+          <div style="margin-top:14px;padding:12px 14px;background:var(--ra-accent-soft);border:1px solid rgba(91,115,232,0.3);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="font-size:12px;color:var(--ra-text);">
+              <strong>Connect OpenAI API Key:</strong> Unlock interactive multi-turn critique & paper reasoning.
+            </div>
+            <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:6px 12px;font-size:11.5px;white-space:nowrap;border-radius:7px;">
+              Configure Key
+            </button>
+          </div>
+        `;
+
+        bubble.innerHTML = formatMarkdown(synthesis) + paperCardsHtml + apiKeyNotice;
+        activeChatHistory.push({ role: 'assistant', content: synthesis });
+        scrollArea.scrollTop = scrollArea.scrollHeight;
+
+        const targetSess = allChatSessions.find(s => s.id === currentSessionId);
+        if (targetSess) {
+          if (!targetSess.messages) targetSess.messages = [];
+          targetSess.messages.push({ role: 'user', content: text });
+          targetSess.messages.push({ role: 'assistant', content: synthesis, sources: retrievedPapers });
+          targetSess.updated_at = new Date().toISOString();
+          saveLocalSessionsBackup();
+          renderSidebarSessions();
+        }
+        return;
+      }
+
       const paperContextStr = retrievedPapers.map((p, idx) => 
         `[Paper ${idx + 1}] Title: "${p.title}"\nAuthors: ${p.authors} (${p.year})\nVenue: ${p.venue} | Citations: ${p.citations}\nDOI/URL: ${p.url}\nAbstract: ${p.abstract.slice(0, 320)}...`
       ).join('\n\n');
@@ -2181,6 +2310,33 @@ In your response:
 
     } else {
       // INTENT A: General Chatbot Mode: Understand intent, explore research area, explain concepts & gaps
+      if (!getActiveApiKey()) {
+        const promptCard = `
+          <div style="background:var(--ra-accent-soft);border:1px solid rgba(91,115,232,0.3);border-radius:12px;padding:16px 18px;max-width:560px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ra-accent)" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1010 0 5 5 0 00-10 0z"/><path d="M12 16v5l3-3"/></svg>
+              <strong style="font-size:13.5px;color:var(--ra-text);">OpenAI API Key Required for AI Reasoning</strong>
+            </div>
+            <p style="font-size:12.5px;color:var(--ra-muted);line-height:1.55;margin:0 0 12px;">
+              To discuss <em>"${escapeHtml(text)}"</em> with real-time GPT reasoning, please enter your OpenAI API key.
+              Your key stays safely in your browser's private local storage.
+            </p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:7px 16px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;border-radius:8px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+                Enter API Key
+              </button>
+              <button type="button" onclick="requestPapersForTopic('${escapeHtml(text).replace(/'/g, "\\'")}')" class="btn-outline" style="padding:7px 16px;font-size:12.5px;border-radius:8px;">
+                📚 Search Literature (No Key Needed)
+              </button>
+            </div>
+          </div>
+        `;
+        bubble.innerHTML = promptCard;
+        scrollArea.scrollTop = scrollArea.scrollHeight;
+        openApiKeyModal();
+        return;
+      }
       systemInstruction = `You are an elite academic research advisor, mentor, and domain expert powered by OpenAI GPT-6 Luna.
 Your mission is to understand the researcher's intent, explore their ideas, help them identify promising research areas or problem statements, explain complex scientific concepts clearly, and guide them in formulating sharp research questions and methodologies.
 
@@ -2270,7 +2426,26 @@ Core Guidelines:
         }
       },
       (err) => {
-        bubble.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}. Please check connection.</span>` + paperCardsHtml;
+        let errBox = '';
+        if (err.message && err.message.includes('API_KEY')) {
+          errBox = `
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;max-width:540px;margin-top:6px;">
+              <div style="color:#ef4444;font-weight:600;font-size:13px;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                OpenAI API Key Required
+              </div>
+              <p style="font-size:12px;color:var(--ra-muted);margin:0 0 10px;line-height:1.45;">
+                ${escapeHtml(err.message.replace('INVALID_API_KEY: ', ''))}
+              </p>
+              <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:5px 14px;font-size:11.5px;border-radius:6px;">
+                Configure API Key
+              </button>
+            </div>
+          `;
+        } else {
+          errBox = `<span style="color:#ef4444;font-size:12.5px;">Error: ${escapeHtml(err.message)}. Please check your internet connection.</span>`;
+        }
+        bubble.innerHTML = errBox + paperCardsHtml;
       }
     );
   }
@@ -2513,7 +2688,26 @@ Core Guidelines:
       prompt = `Paper: "${currentLoadedPaper.title}"\nFull Paper Context:\n${currentLoadedPaper.text}\n\nQuestion: ${q}\n\nAnswer precisely referencing the text.`;
     }
 
-    resultContent.innerHTML = '<span class="cursor-blink">Analyzing paper with GPT-6 Luna... ▌</span>';
+    if (!getActiveApiKey()) {
+      resultContent.innerHTML = `
+        <div style="background:var(--ra-accent-soft);border:1px solid rgba(91,115,232,0.3);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ra-accent)" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1010 0 5 5 0 00-10 0z"/><path d="M12 16v5l3-3"/></svg>
+            <strong style="font-size:13.5px;color:var(--ra-text);">OpenAI API Key Required for Paper Analysis</strong>
+          </div>
+          <p style="font-size:12.5px;color:var(--ra-muted);line-height:1.5;margin:0 0 12px;">
+            To analyze <em>"${escapeHtml(currentLoadedPaper.title)}"</em> with AI, please configure your OpenAI API key.
+          </p>
+          <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:6px 14px;font-size:12px;border-radius:8px;">
+            Configure API Key
+          </button>
+        </div>
+      `;
+      openApiKeyModal();
+      return;
+    }
+
+    resultContent.innerHTML = '<span class="cursor-blink">Analyzing paper with AI... ▌</span>';
 
     let fullAnalysis = '';
     await callOpenAIStream(
@@ -2529,7 +2723,17 @@ Core Guidelines:
         resultContent.innerHTML = formatMarkdown(fullAnalysis);
       },
       (err) => {
-        resultContent.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        if (err.message && err.message.includes('API_KEY')) {
+          resultContent.innerHTML = `
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;">
+              <div style="color:#ef4444;font-weight:600;font-size:13px;margin-bottom:4px;">OpenAI API Key Required or Invalid</div>
+              <p style="font-size:12px;color:var(--ra-muted);margin:0 0 8px;">${escapeHtml(err.message)}</p>
+              <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:5px 12px;font-size:11.5px;border-radius:6px;">Configure Key</button>
+            </div>
+          `;
+        } else {
+          resultContent.innerHTML = `<span style="color:#ef4444;">Error: ${escapeHtml(err.message)}</span>`;
+        }
       }
     );
   }
@@ -2709,6 +2913,25 @@ Please generate an in-depth Collaboration Alignment Report:
 6. Tailored Cold Email Outreach Template ready to adapt
     `;
 
+    if (!getActiveApiKey()) {
+      reportBody.innerHTML = `
+        <div style="background:var(--ra-accent-soft);border:1px solid rgba(91,115,232,0.3);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ra-accent)" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1010 0 5 5 0 00-10 0z"/><path d="M12 16v5l3-3"/></svg>
+            <strong style="font-size:13.5px;color:var(--ra-text);">OpenAI API Key Required for Collaboration Analysis</strong>
+          </div>
+          <p style="font-size:12.5px;color:var(--ra-muted);line-height:1.5;margin:0 0 12px;">
+            To generate in-depth collaboration strategies and outreach templates, please configure your OpenAI API key.
+          </p>
+          <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:6px 14px;font-size:12px;border-radius:8px;">
+            Configure API Key
+          </button>
+        </div>
+      `;
+      openApiKeyModal();
+      return;
+    }
+
     let fullReport = '';
     await callOpenAIStream(
       [
@@ -2729,7 +2952,17 @@ Please generate an in-depth Collaboration Alignment Report:
         ];
       },
       (err) => {
-        reportBody.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        if (err.message && err.message.includes('API_KEY')) {
+          reportBody.innerHTML = `
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;">
+              <div style="color:#ef4444;font-weight:600;font-size:13px;margin-bottom:4px;">OpenAI API Key Required or Invalid</div>
+              <p style="font-size:12px;color:var(--ra-muted);margin:0 0 8px;">${escapeHtml(err.message)}</p>
+              <button type="button" onclick="openApiKeyModal()" class="btn-primary" style="padding:5px 12px;font-size:11.5px;border-radius:6px;">Configure Key</button>
+            </div>
+          `;
+        } else {
+          reportBody.innerHTML = `<span style="color:#ef4444;">Error: ${escapeHtml(err.message)}</span>`;
+        }
       }
     );
   }
@@ -2757,6 +2990,12 @@ Please generate an in-depth Collaboration Alignment Report:
     feed.appendChild(aEl);
     feed.scrollTop = feed.scrollHeight;
 
+    if (!getActiveApiKey()) {
+      aEl.innerHTML = `<span style="color:#ef4444;">OpenAI API key required. <a href="#" onclick="openApiKeyModal();return false;" style="color:var(--ra-accent);font-weight:600;">Configure Key</a></span>`;
+      openApiKeyModal();
+      return;
+    }
+
     collabFollowupHistory.push({ role: 'user', content: question });
 
     let fullAnswer = '';
@@ -2780,15 +3019,22 @@ Please generate an in-depth Collaboration Alignment Report:
 
   // 4. OPENAI & SEMANTIC SCHOLAR STREAMING UTILITIES
   async function callOpenAIStream(messages, onChunk, onDone, onError) {
+    const currentKey = getActiveApiKey();
+    if (!currentKey) {
+      if (onError) onError(new Error("API_KEY_REQUIRED"));
+      return;
+    }
+    const currentModel = getActiveModel();
+
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + API_KEY
+          'Authorization': 'Bearer ' + currentKey
         },
         body: JSON.stringify({
-          model: 'gpt-6-luna',
+          model: currentModel,
           messages: messages,
           stream: true
         })
@@ -2796,7 +3042,11 @@ Please generate an in-depth Collaboration Alignment Report:
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        const errMsg = errData.error?.message || `HTTP ${response.status}`;
+        if (response.status === 401 || errMsg.toLowerCase().includes('api key')) {
+          throw new Error("INVALID_API_KEY: " + errMsg);
+        }
+        throw new Error(errMsg);
       }
 
       const reader = response.body.getReader();
@@ -3291,6 +3541,68 @@ Please generate an in-depth Collaboration Alignment Report:
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
     </form>
+  </div>
+</div>
+
+<!-- ===== MODAL: AI API KEY CONFIGURATION ===== -->
+<div id="api-key-modal" class="ra-modal-overlay" style="display:none;" onclick="if(event.target===this) closeApiKeyModal()">
+  <div class="ra-modal-card" style="max-width:460px;width:92%;padding:26px 28px;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,0.35);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;border-radius:10px;background:var(--ra-accent-soft);display:flex;align-items:center;justify-content:center;color:var(--ra-accent);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1010 0 5 5 0 00-10 0z"/><path d="M12 16v5l3-3"/></svg>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:16.5px;color:var(--ra-text);letter-spacing:-0.2px;">AI Model & API Keys</div>
+          <div style="font-size:11.5px;color:var(--ra-muted);">Configure your OpenAI API key</div>
+        </div>
+      </div>
+      <button type="button" onclick="closeApiKeyModal()" class="session-action-btn" style="width:30px;height:30px;border-radius:8px;" aria-label="Close modal">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <p style="font-size:12.5px;color:var(--ra-muted);line-height:1.55;margin:0 0 16px;">
+      Your API key powers real-time reasoning, methodology synthesis, and scholar chat. It is stored <strong>locally in your browser</strong> and is never stored on our servers.
+    </p>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ra-text);">
+        OpenAI API Key:
+      </label>
+      <div style="position:relative;">
+        <input type="password" id="modal-openai-key-input" placeholder="sk-proj-..." style="width:100%;box-sizing:border-box;padding:10px 40px 10px 12px;background:var(--ra-bg);border:1px solid var(--ra-border);border-radius:8px;font-size:13px;color:var(--ra-text);outline:none;font-family:monospace;" />
+        <button type="button" onclick="toggleApiKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;cursor:pointer;color:var(--ra-muted);padding:4px;" title="Show/Hide Key">
+          <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--ra-accent);text-decoration:none;">
+          Get an OpenAI key →
+        </a>
+        <span id="modal-key-status-indicator" style="font-size:11px;color:var(--ra-muted);"></span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--ra-text);">
+        Model Selection:
+      </label>
+      <select id="modal-model-select" style="width:100%;box-sizing:border-box;padding:9px 12px;background:var(--ra-bg);border:1px solid var(--ra-border);border-radius:8px;font-size:12.5px;color:var(--ra-text);outline:none;">
+        <option value="gpt-4o-mini">GPT-4o Mini (Recommended — Fast & Cost-Effective)</option>
+        <option value="gpt-4o">GPT-4o (High-Intelligence Flagship)</option>
+        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy Fast)</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" onclick="clearApiKey()" class="btn-outline" style="padding:8px 14px;font-size:12.5px;color:#ef4444;border-color:rgba(239,68,68,0.3);">
+        Clear Key
+      </button>
+      <button type="button" onclick="saveApiKey()" class="btn-primary" style="padding:8px 20px;font-size:12.5px;">
+        Save Key
+      </button>
+    </div>
   </div>
 </div>
 
