@@ -10,11 +10,14 @@
   <!-- Google Identity Services (Official Real-Time Google Sign-In) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- PDF & Markdown Parsers -->
-  <script src="marked.min.js"></script>
-  <script src="pdf.worker.min.js"></script>
-  <script src="pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+  <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  </script>
   <style>
     :root {
       --ra-bg: #f8f7f4;

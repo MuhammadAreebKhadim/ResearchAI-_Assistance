@@ -7,6 +7,12 @@
   </p>
 
   <p align="center">
+    <a href="https://researchai-assistant.vercel.app" target="_blank">
+      <img src="https://img.shields.io/badge/🚀_Live_Demo-researchai--assistant.vercel.app-5b73e8?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" />
+    </a>
+  </p>
+
+  <p align="center">
     <a href="https://github.com/MuhammadAreebKhadim/ResearchAI-_Assistance/stargazers"><img src="https://img.shields.io/github/stars/MuhammadAreebKhadim/ResearchAI-_Assistance?style=for-the-badge&color=5b73e8" alt="Stars"></a>
     <a href="https://github.com/MuhammadAreebKhadim/ResearchAI-_Assistance/network/members"><img src="https://img.shields.io/github/forks/MuhammadAreebKhadim/ResearchAI-_Assistance?style=for-the-badge&color=7c8ff8" alt="Forks"></a>
     <a href="https://github.com/MuhammadAreebKhadim/ResearchAI-_Assistance/issues"><img src="https://img.shields.io/github/issues/MuhammadAreebKhadim/ResearchAI-_Assistance?style=for-the-badge&color=3d9970" alt="Issues"></a>
