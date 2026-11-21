@@ -332,11 +332,13 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 return self.send_error_json(500, "OPENAI_API_KEY is not configured on server")
 
             messages = body.get("messages", [])
-            model = body.get("model", "gpt-4o-mini")
-            if model == "gpt-6-luna":
-                model = "gpt-4o-mini"
+            model = body.get("model", "gpt-6-luna")
 
-            payload = json.dumps({"model": model, "messages": messages, "stream": True}).encode("utf-8")
+            req_payload = {"model": model, "messages": messages, "stream": True}
+            if "luna" not in model.lower() and "o1" not in model.lower() and "o3" not in model.lower():
+                req_payload["temperature"] = 0.2
+
+            payload = json.dumps(req_payload).encode("utf-8")
             req = urllib.request.Request(
                 "https://api.openai.com/v1/chat/completions",
                 data=payload,

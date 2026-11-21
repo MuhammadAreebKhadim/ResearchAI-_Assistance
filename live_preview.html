@@ -490,24 +490,18 @@
       </div>
     </div>
 
-    <!-- Structured Nav Links (All destinations clearly laid out, no clutter) -->
+    <!-- Structured Nav Links (Order: Home, About, Features, Research Assistant, Paper Explainer, Collaboration Finder) -->
     <nav class="nav-links-container" style="display:flex;align-items:center;gap:4px;">
       <span class="nav-link active" id="nav-home" onclick="showPage('home')">Home</span>
+      <span class="nav-link" id="nav-about" onclick="showPage('about')">About</span>
+      <span class="nav-link" id="nav-features" onclick="showPage('features')">Features</span>
       <span class="nav-link" id="nav-research" onclick="showPage('research')">Research Assistant</span>
       <span class="nav-link" id="nav-paper" onclick="showPage('paper')">Paper Explainer</span>
       <span class="nav-link" id="nav-collaborate" onclick="showPage('collaborate')">Collaboration Finder</span>
-      <span class="nav-link" id="nav-features" onclick="showPage('features')">Features</span>
-      <span class="nav-link" id="nav-about" onclick="showPage('about')">About</span>
     </nav>
 
-    <!-- Right Controls: Status Pill + Minimalist Theme Toggle + Google Profile -->
+    <!-- Right Controls: Minimalist Theme Toggle + Google Profile -->
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-      <!-- AI Engine Status Pill (Informational only - NO key input fields!) -->
-      <button onclick="openEngineInfoModal()" class="tag" style="cursor:pointer;padding:5px 10px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:6px;border-radius:999px;background:var(--ra-surface);border:1px solid var(--ra-border);color:var(--ra-text);transition:all 0.15s ease;" title="AI Model & System Status">
-        <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.6);"></span>
-        <span>GPT-6 Luna</span>
-      </button>
-
       <!-- Minimalist Icon-Only Theme Toggle (34x34px rounded, clean SVG) -->
       <button onclick="toggleTheme()" id="theme-toggle-btn" class="session-action-btn" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--ra-border);background:var(--ra-surface);" title="Toggle Dark/Light Mode">
         <svg id="icon-sun" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none;color:var(--ra-text);">
@@ -1125,8 +1119,8 @@
   function getActiveApiKey() { return "SERVER_MANAGED_KEY"; }
   function getActiveModel() { return "gpt-6-luna"; }
 
-  const pages = ['home', 'research', 'paper', 'collaborate', 'about', 'features'];
-  const navIds = ['home', 'research', 'paper', 'collaborate', 'features', 'about'];
+  const pages = ['home', 'about', 'features', 'research', 'paper', 'collaborate'];
+  const navIds = ['home', 'about', 'features', 'research', 'paper', 'collaborate'];
 
   let activeChatHistory = [];
   let currentLoadedPaper = { title: '', text: '', words: 0 };
@@ -2068,39 +2062,75 @@
     sendChatMessage(query);
   }
 
-  // Precise Intent Detection: only triggers paper search when user actually demands or requests papers
+  // Precise Intent Detection: triggers paper search when user requests research papers, links, DOIs, etc.
   function isExplicitPaperDemand(text) {
+    if (!text) return false;
     const t = text.trim().toLowerCase();
     const demandPatterns = [
-      /\b(give me|show me|find me|fetch|search for|pull|get me|provide|recommend|list|send me|look for)\b.*?\b(papers?|articles?|preprints?|publications?|literature)\b/i,
-      /\b(latest|recent|sota|top|seminal|landmark)?\s*(research\s+)?(papers?|articles?|publications?|literature)\s+(on|about|for|regarding|in)\b/i,
+      /\b(give me|show me|find me|fetch|search for|pull|get me|provide|recommend|list|send me|look for|share)\b.*?\b(papers?|articles?|preprints?|publications?|literature|studies)\b/i,
+      /\b(latest|recent|sota|top|seminal|landmark)?\s*(research\s+)?(papers?|articles?|publications?|literature|studies)\s+(on|about|for|regarding|in)\b/i,
       /\b(want|need|looking)\s+to\s+(read|see|find|explore)\s+(papers?|articles?|publications?|literature)\b/i,
       /^(papers?|find papers?|fetch papers?|search papers?|give papers?|show papers?)\b/i,
-      /\b(what|which|any)\s+papers?\s+(on|about|discussing|evaluating)\b/i
+      /\b(what|which|any)\s+papers?\s+(on|about|discussing|evaluating)\b/i,
+      /\b(papers?|articles?)\s+(link|links|url|urls|pdf|pdfs|doi|dois|download)\b/i,
+      /\b(link|links|url|urls|pdf|pdfs|doi|dois)\s+(for\s+papers?|to\s+papers?|of\s+papers?)\b/i,
+      /\b(papers?)\s+(also|too|as well|please|pls)\b/i,
+      /\b(give me|send me|show me|share)\s+(paper\s+)?(links?|urls?|dois?|pdfs?)\b/i,
+      /\b(paper\s+links?|links?\s+to\s+papers?|papers?\s+with\s+links?)\b/i
     ];
     return demandPatterns.some(pattern => pattern.test(t));
   }
 
-  // Clean the raw user query to extract the targeted scientific topic
+  // Universal Topic Extractor: Works for ANY scientific field, dynamically resolving topics from history when query is a follow-up
   function extractCleanTopicQuery(text, previousHistory = []) {
-    let clean = text
-      .replace(/\b(find|search|give me|show me|recommend|look for|list|get|fetch|pull|research|papers?|articles?|preprints?|publications?|literature|about|on|for|regarding|latest|recent|sota|state of the art|domain|please|can you|i want|i need|to read|to see)\b/gi, ' ')
-      .replace(/\b(a|an|the|of|in|to)\b/gi, ' ')
+    if (!text && (!previousHistory || previousHistory.length === 0)) return 'artificial intelligence';
+
+    const metaRegex = /\b(find|search|give\s+me|show\s+me|recommend|look\s+for|list|get\s+me|get|fetch|pull|research|papers?|articles?|preprints?|publications?|literature|studies|study|links?|urls?|dois?|pdfs?|downloads?|sources?|references?|citations?|about|on|for|regarding|latest|recent|sota|state\s+of\s+the\s+art|domain|please|pls|can\s+you|could\s+you|i\s+want|i\s+need|would\s+like|to\s+read|to\s+see|also|too|as\s+well|with\s+links?|and\s+links?|with\s+pdfs?|direct\s+links?|here|now|more|some|any|this|that|these|those|it|them)\b/gi;
+
+    let clean = (text || '')
+      .replace(metaRegex, ' ')
+      .replace(/\b(a|an|the|of|in|to|and|or|with)\b/gi, ' ')
       .replace(/[^\w\s-]/g, ' ')
       .trim()
       .replace(/\s+/g, ' ');
 
-    if (clean.length < 3 && previousHistory && previousHistory.length > 0) {
+    const junkWords = new Set(['link', 'links', 'also', 'too', 'paper', 'papers', 'pdf', 'pdfs', 'url', 'urls', 'doi', 'dois', 'source', 'sources', 'here', 'more', 'all', 'link also', 'links also', 'give', 'get']);
+
+    if ((clean.length < 3 || junkWords.has(clean.toLowerCase())) && previousHistory && previousHistory.length > 0) {
+      // 1. Backwards search through previous USER messages for the true subject domain
+      for (let i = previousHistory.length - 1; i >= 0; i--) {
+        if (previousHistory[i].role === 'user') {
+          const msg = previousHistory[i].content;
+          if (!msg || msg.trim().toLowerCase() === (text || '').trim().toLowerCase()) continue;
+          let candidate = msg
+            .replace(metaRegex, ' ')
+            .replace(/\b(what|are|the|gaps|challenges|open|issues|problems|how|why|can|you|help|me|with|tell|discuss|explain|methods?|approaches?|architectures?|models?|in|of|for|on|to|a|an|the|is|it|do|does)\b/gi, ' ')
+            .replace(/[^\w\s-]/g, ' ')
+            .trim()
+            .replace(/\s+/g, ' ');
+          if (candidate.length > 2 && !junkWords.has(candidate.toLowerCase())) {
+            return candidate;
+          }
+        }
+      }
+
+      // 2. Fallback: Search previous assistant messages
       for (let i = previousHistory.length - 1; i >= 0; i--) {
         const msg = previousHistory[i].content;
-        const stripped = msg.replace(/[^\w\s-]/g, ' ').replace(/\b(what|are|the|gaps|challenges|in|how|why|can|you|help|me|with|find|give|papers|literature|latest|recent)\b/gi, ' ').trim().replace(/\s+/g, ' ');
-        if (stripped.length > 3) {
-          clean = stripped;
-          break;
+        if (!msg || msg.trim().toLowerCase() === (text || '').trim().toLowerCase()) continue;
+        let candidate = msg
+          .replace(metaRegex, ' ')
+          .replace(/\b(what|are|the|gaps|challenges|open|issues|problems|how|why|can|you|help|me|with|tell|discuss|explain|methods?|approaches?|architectures?|models?|in|of|for|on|to|a|an|the|is|it|do|does)\b/gi, ' ')
+          .replace(/[^\w\s-]/g, ' ')
+          .trim()
+          .replace(/\s+/g, ' ');
+        if (candidate.length > 2 && !junkWords.has(candidate.toLowerCase())) {
+          return candidate.split(' ').slice(0, 5).join(' ');
         }
       }
     }
-    return clean.length > 2 ? clean : text;
+
+    return (clean.length > 2 && !junkWords.has(clean.toLowerCase())) ? clean : (text || 'artificial intelligence');
   }
 
   // Extract recommended research topics from AI response (from tables or bold headings)
@@ -2268,40 +2298,58 @@
         paperCardsHtml = `<div style="margin-top:10px;font-size:12px;color:var(--ra-muted);">No open papers found for "${escapeHtml(targetTopic)}". You can try broader keywords.</div>`;
       }
 
-      const paperContextStr = retrievedPapers.map((p, idx) => 
-        `[Paper ${idx + 1}] Title: "${p.title}"\nAuthors: ${p.authors} (${p.year})\nVenue: ${p.venue} | Citations: ${p.citations}\nDOI/URL: ${p.url}\nAbstract: ${p.abstract.slice(0, 320)}...`
-      ).join('\n\n');
+      if (retrievedPapers.length > 0) {
+        const paperContextStr = retrievedPapers.map((p, idx) => 
+          `[Verified Paper ${idx + 1}]
+Title: "${p.title}"
+Authors: ${p.authors} (${p.year})
+Venue: ${p.venue} | Citations: ${p.citations}
+Publisher DOI / URL: ${p.url}
+Direct PDF URL: ${p.pdfUrl || 'N/A'}
+Summary: ${p.abstract}`
+        ).join('\n\n---\n\n');
 
-      systemInstruction = `You are an elite academic research assistant powered by OpenAI GPT-6 Luna. The user has specifically requested published research papers on the domain: "${targetTopic}".
-Format your response with clean, structured Markdown (bold headings, bullet points, clean tables where comparing approaches).
+        systemInstruction = `You are an elite academic research assistant. The user requested published research literature and direct paper links for: "${targetTopic}".
 
-CRITICAL ZERO-HALLUCINATION INSTRUCTION:
-The following real, verified academic papers were retrieved directly from OpenAlex and ArXiv for the user's request:
+CRITICAL ZERO-HALLUCINATION & LINK FIDELITY RULES:
+Academic repositories (OpenAlex and ArXiv) have retrieved the following real, verified papers specifically for "${targetTopic}":
 
 ${paperContextStr}
 
-In your response:
-1. Introduce and synthesize THESE exact retrieved papers by their real title, authors, and year.
-2. Highlight their core contributions, methodologies, and findings.
-3. Compare how they address the domain and what problems remain open.
-4. DO NOT invent fake papers or fabricate DOIs.
-5. Conclude with a helpful follow-up asking which paper's methodology or dataset they would like to explore in depth in the Paper Explainer tab.`;
+YOUR INSTRUCTIONS:
+1. Synthesize and present the verified papers retrieved above.
+2. Structure each paper clearly with headings and bullet points (use clean line breaks so text does not run together):
+   ### [Exact Paper Title]
+   - **Authors & Year**: [Authors] ([Year]) · *[Venue]* (${p.citations} citations)
+   - **Core Contribution & Methodology**: Clear summary of what the authors did and their findings.
+   - **Verified Links**: [Read Paper / Publisher DOI](exact URL from context) ${p.pdfUrl ? `· [Direct Free PDF](exact PDF URL from context)` : ''}
+3. STRICT ACCURACY REQUIREMENTS:
+   - Use ONLY the exact verified papers and exact URLs/DOIs provided above.
+   - NEVER fabricate, invent, or guess paper titles, author names, DOIs, or URLs.
+   - Always maintain clean line breaks between Title, Authors, Core Contributions, and Verified Links.
+4. Conclude with a helpful follow-up inviting the user to explore any of these specific papers in depth in the Paper Explainer tab.`;
+      } else {
+        systemInstruction = `You are an elite academic research assistant. The user has requested research papers on: "${targetTopic}".
+Direct search on open-access repositories yielded no immediate results for this specific phrasing.
+Please recommend 3-4 landmark, well-known papers in this domain that you are certain exist, or recommend more specific academic keywords to query. Remind the user to verify exact DOIs on Google Scholar or publisher databases.`;
+      }
 
     } else {
-      // INTENT A: General Chatbot Mode: Understand intent, explore research area, explain concepts & gaps
-      systemInstruction = `You are an elite academic research advisor, mentor, and domain expert powered by OpenAI GPT-6 Luna.
-Your mission is to understand the researcher's intent, explore their ideas, help them identify promising research areas or problem statements, explain complex scientific concepts clearly, and guide them in formulating sharp research questions and methodologies.
+      // INTENT A: General Chatbot Mode: Understand intent, explore research area, explain concepts & gaps with deep scientific rigor
+      systemInstruction = `You are an elite academic research advisor, principal investigator, and domain expert powered by OpenAI GPT-6 Luna.
+Your mission is to understand the researcher's intent with utmost precision, provide mathematically and scientifically rigorous explanations, and guide them in formulating sharp, publication-grade research questions and methodologies.
 
-Core Guidelines:
-1. Intent Exploration & Mentorship:
-   - When a user brings up a topic or asks questions, analyze what they want to achieve and help them navigate sub-domains, realistic assumptions, and novelty.
-   - Do not dump bibliographic paper lists unless the user explicitly asks for papers to read. Instead, focus on conceptual clarity, trade-offs, and research gap formulation.
+Core Guidelines for Accuracy & Depth:
+1. Scientific Accuracy & Mathematical Rigor:
+   - Provide mathematically precise definitions, algorithmic mechanisms, and formal theoretical assumptions.
+   - When discussing trade-offs, architectures, or models, ALWAYS structure them in crisp, comparative Markdown tables (| Architecture / Approach | Key Mechanism | Computational Complexity | Primary Limitation |) with explicit newlines between rows.
+   - Distinguish firmly between established empirical consensus and active open research debates.
 2. Structured & Crystal Clear Formatting:
    - Use bold section headings (### Heading) to segment your response logically.
-   - Use bullet points for easy scanning.
-   - Whenever comparing research gaps, trade-offs, or methodologies, ALWAYS format them as a clean Markdown table (| Column 1 | Column 2 | ...) with explicit newlines between rows so it renders as a crisp academic table.
+   - Use clean bullet points for easy scanning.
+   - Maintain clear line breaks so paragraphs and equations never run together.
 3. Engaging Follow-Up:
-   - Conclude with ONE or TWO insightful, thought-provoking questions to help the user narrow down their specific interest (e.g. theoretical vs simulation vs experimental, specific algorithms, or datasets).
+   - Conclude with ONE or TWO insightful, thought-provoking questions to help the researcher narrow down their specific interest (e.g. theoretical vs simulation vs experimental, specific algorithms, or datasets).
 4. Invitation to Explore Literature:
    - Conclude your answer with a friendly invitation:
      "💡 **Ready to explore published literature?** If you'd like to dive into published papers on any of these directions, simply ask: *'Give me papers on [topic]'* or click a topic chip below, and I will fetch verified papers with real DOIs directly."`;
@@ -2605,29 +2653,104 @@ Core Guidelines:
     resultBox.style.display = 'block';
     resultBox.scrollIntoView({ behavior: 'smooth' });
 
+    const paperSystemPrompt = `You are a premier senior peer reviewer and principal investigator for top-tier scientific venues (Nature, Science, NeurIPS, ICML, IEEE TPAMI) powered by OpenAI GPT-6 Luna.
+Your core mission is ABSOLUTE FIDELITY, RIGOROUS ACCURACY, and GROUNDED SCIENTIFIC TRUTH to the provided research document.
+
+STRICT GROUNDING & ZERO-HALLUCINATION RULES:
+1. Ground every statement, claim, metric, and conclusion strictly in the provided paper text.
+2. NEVER invent, extrapolate, or hallucinate baselines, metrics, equations, or datasets not reported in the provided text.
+3. If the paper text is an abstract or excerpt (e.g., from an indexing database), thoroughly analyze everything contained in that excerpt with precision, and explicitly note which architectural or implementation details require reading the full unabridged manuscript.
+4. Format with clean, structured Markdown using bold headers (### Section), bullet points, and clean comparison tables (| Feature | Finding |) with proper spacing so text is readable and visually pleasing.`;
+
     let prompt = '';
     if (selectedPaperMode === 'summary') {
-      resultTag.innerText = 'Executive Summary';
-      prompt = `Paper: "${currentLoadedPaper.title}"\nFull Paper Context:\n${currentLoadedPaper.text}\n\nProvide an executive summary of this research paper covering: 1. Core Problem & Motivation, 2. Key Methodology/Architecture, 3. Empirical Results, 4. Research Implications.`;
+      resultTag.innerText = 'Executive Scientific Summary';
+      prompt = `Paper Title: "${currentLoadedPaper.title}"
+Provided Paper Text:
+${currentLoadedPaper.text}
+
+Perform an authoritative Executive Scientific Summary of this research paper adhering strictly to the text provided:
+
+### 1. Research Problem & Core Motivation
+- What specific scientific bottleneck, theoretical gap, or practical limitation do the authors tackle?
+- Why do existing state-of-the-art approaches fall short?
+
+### 2. Proposed Methodology & Technical Architecture
+- What concrete algorithms, theoretical formulations, loss functions, or system architectures did the authors introduce?
+- What is the key conceptual breakthrough or novel mechanism that differentiates their approach?
+
+### 3. Key Empirical Results & Benchmark Performance
+- What specific benchmark datasets, baselines, and evaluation metrics (e.g. accuracy, F1, error reduction, latency) were evaluated?
+- Highlight the exact quantitative performance gains reported in the text.
+
+### 4. Critical Significance & Implications
+- How does this work advance the broader field, and what practical applications or follow-up directions does it unlock?`;
     } else if (selectedPaperMode === 'simplify') {
       resultTag.innerText = 'Simplified Explanation (ELI15)';
-      prompt = `Paper: "${currentLoadedPaper.title}"\nFull Paper Context:\n${currentLoadedPaper.text}\n\nExplain this paper in plain, intuitive language for an educated non-specialist. Unpack technical acronyms and focus on intuition and why it matters.`;
+      prompt = `Paper Title: "${currentLoadedPaper.title}"
+Provided Paper Text:
+${currentLoadedPaper.text}
+
+Explain this research paper in clear, intuitive, and engaging language for an educated researcher or student who is new to this specific subfield:
+
+### 1. The Big Picture & The Analogy
+- Use an intuitive real-world analogy to explain what challenge the researchers are solving and why it is difficult.
+
+### 2. How the Technology Works (Under the Hood)
+- Demystify the technical jargon and acronyms from the paper.
+- Walk through the core mechanism step-by-step in plain, clear language without losing scientific accuracy.
+
+### 3. The "Secret Sauce"
+- What single trick, algorithmic twist, or novel insight made their approach work when others struggled?
+
+### 4. Real-World Impact & Takeaways
+- Why does this matter for real-world applications, and what can researchers build next?`;
     } else if (selectedPaperMode === 'deep') {
-      resultTag.innerText = 'Deep Breakdown';
-      prompt = `Paper: "${currentLoadedPaper.title}"\nFull Paper Context:\n${currentLoadedPaper.text}\n\nProvide a technical section-by-section breakdown: theoretical foundations, experimental setup, baseline comparisons, and critical strengths/limitations.`;
+      resultTag.innerText = 'Deep Technical Breakdown';
+      prompt = `Paper Title: "${currentLoadedPaper.title}"
+Provided Paper Text:
+${currentLoadedPaper.text}
+
+Provide a rigorous, section-by-section peer-review breakdown of this paper strictly grounded in the provided text:
+
+### 1. Theoretical Foundations & Problem Formulation
+- Formal mathematical objectives, assumptions, and theoretical guarantees established in the text.
+
+### 2. Algorithmic Pipeline & Architectural Innovations
+- In-depth deconstruction of the data flow, model components, novel mechanisms, and training paradigms.
+
+### 3. Experimental Setup & Benchmarks
+- Comprehensive analysis of the datasets, ablation studies, baseline comparisons, and statistical significance reported in the text.
+
+### 4. Methodological Strengths & Critical Limitations
+- **Strengths**: Concrete technical rigor, novel paradigms, or benchmark dominance demonstrated in the paper.
+- **Limitations**: Edge cases, computational complexity, unaddressed failure modes, or unverified assumptions identified in the text.
+
+### 5. Peer-Review Verdict & Open Questions
+- Reproducibility assessment and unresolved theoretical questions for future research.`;
     } else if (selectedPaperMode === 'qa') {
       const q = document.getElementById('paper-custom-qa').value.trim();
       if (!q) { showToast("Please enter your research question."); return; }
       resultTag.innerText = `Q&A: "${q}"`;
-      prompt = `Paper: "${currentLoadedPaper.title}"\nFull Paper Context:\n${currentLoadedPaper.text}\n\nQuestion: ${q}\n\nAnswer precisely referencing the text.`;
+      prompt = `Paper Title: "${currentLoadedPaper.title}"
+Provided Paper Text:
+${currentLoadedPaper.text}
+
+Researcher's Question: "${q}"
+
+Answer the researcher's question strictly grounded in the provided paper text:
+1. Direct Answer: Provide a clear, precise, and scientifically rigorous answer to the question.
+2. Direct Textual Evidence: Quote or cite the exact passages, sections, equations, or tables from the provided text supporting your answer.
+3. Technical Caveats & Conditions: Note any conditions, parameter ranges, or scope limitations specified by the authors.
+4. Grounding Safeguard: If the question asks for information not contained in the provided text, state explicitly: "This detail is not documented in the provided paper text" and summarize what relevant related information the paper does provide.`;
     }
 
-    resultContent.innerHTML = '<span class="cursor-blink">Analyzing paper with AI... ▌</span>';
+    resultContent.innerHTML = '<span class="cursor-blink">Analyzing paper with GPT-6 Luna... ▌</span>';
 
     let fullAnalysis = '';
     await callOpenAIStream(
       [
-        { role: 'system', content: 'You are an expert peer reviewer and academic explainer.' },
+        { role: 'system', content: paperSystemPrompt },
         { role: 'user', content: prompt }
       ],
       (token) => {
@@ -2804,24 +2927,59 @@ USER'S RESEARCH BACKGROUND:
 ${userSummary}
     `.trim();
 
-    const prompt = `
-You are an expert Academic Advisor & Collaboration Mentor.
+    const collabSystemPrompt = `You are a distinguished Dean of Graduate Studies, principal investigator, and academic partnership director powered by OpenAI GPT-6 Luna.
+Your mandate is to provide an objective, scientifically rigorous, and deeply aligned collaboration assessment between a candidate researcher and a target scholar.
 
+CORE PRINCIPLES:
+1. Strict Grounding: Analyze strictly based on the target scholar's verified publications, papers, and the candidate's explicit research statement.
+2. Scientific Nuance: No empty flattery or superficial buzzwords. Evaluate true methodological complementarity (e.g. theoretical formulations vs empirical pipelines, algorithm design vs domain-specific benchmarks).
+3. Realistic Assessment: Highlight genuine knowledge gaps the candidate must address, alongside authentic mutual synergies.
+4. Professional Quality: Format with clean, structured Markdown, bold headings, bullet points, and clean comparison tables.`;
+
+    const prompt = `
+SCHOLAR PROFILE & PUBLICATIONS:
 ${activeProfessorContext}
 
-Please generate an in-depth Collaboration Alignment Report:
-1. Professor's Core Research Focus & Methodologies
-2. Alignment Score: [Score between 0 to 100]/100 with objective justification
-3. Specific Overlapping Themes & Technical Synergies
-4. Gaps to Bridge (skills, datasets, or theoretical areas user should learn)
-5. 2-3 Concrete Joint Research Proposals combining both strengths
-6. Tailored Cold Email Outreach Template ready to adapt
-    `;
+Generate an in-depth, peer-level Collaboration Alignment & Strategic Outreach Dossier:
+
+### 1. Scholar's Active Research Trajectory & Methodological Paradigm
+- Synthesize the scholar's primary scientific thrusts, methodological tools, and focal research questions based on their publications and text.
+
+### 2. Comprehensive Collaboration Alignment Evaluation
+Evaluate alignment across 4 core dimensions with an objective composite score:
+- **Domain & Scientific Overlap**: [Score 0-30]/30 - How closely their problem spaces intersect.
+- **Methodological Complementarity**: [Score 0-35]/35 - How well candidate's skills complement the scholar's methodology (e.g. theoretical vs empirical, algorithm development vs experimental validation).
+- **Tooling, Datasets & Infrastructure Synergy**: [Score 0-20]/20 - Overlapping or mutually beneficial tools and data.
+- **Novelty & Impact Potential**: [Score 0-15]/15 - How transformative a joint initiative could be.
+- **Overall Alignment Index**: **[Sum of above]/100** (with an objective 2-sentence justification).
+
+### 3. Synergistic Opportunities & Concrete Technical Intersections
+- Identify the exact intersection points where candidate's stated expertise directly addresses an open question or ongoing direction in the scholar's work.
+
+### 4. Technical Gaps & Required Preparation
+- What specific domain literature, experimental setups, mathematical foundations, or software frameworks should the candidate master before reaching out?
+
+### 5. Three Concrete Joint Research Proposals
+Formulate 3 actionable, high-impact research projects that genuinely combine both researchers' strengths:
+For each proposal provide:
+- **Project Title**: Rigorous, publication-ready title.
+- **Research Problem & Gap**: The precise challenge to solve.
+- **Candidate's Role**: Concrete technical tasks the candidate would lead.
+- **Scholar's Role**: Resources, expertise, or validation the scholar provides.
+- **Target Publication Venue**: Top-tier journal or conference (e.g. NeurIPS, ICML, CVPR, Nature, IEEE Trans).
+
+### 6. Tailored Cold Email Outreach Template
+Draft a high-conversion, professional cold email ready to send:
+- **Subject Line**: Specific, compelling, and referencing the scholar's actual paper/theme.
+- **Salutation & Hook**: Respectfully demonstrates authentic familiarity with the scholar's recent work.
+- **Value Proposition**: Concisely explains what the candidate has built or researched and how it directly extends the scholar's agenda.
+- **Low-Friction Call-to-Action**: Clear request for a brief 15-minute introductory exchange.
+    `.trim();
 
     let fullReport = '';
     await callOpenAIStream(
       [
-        { role: 'system', content: 'You are an elite academic career mentor. Provide rigorous, objective, and actionable collaboration advice.' },
+        { role: 'system', content: collabSystemPrompt },
         { role: 'user', content: prompt }
       ],
       (token) => {
@@ -2833,7 +2991,7 @@ Please generate an in-depth Collaboration Alignment Report:
         // Show interactive collaboration chat
         document.getElementById('collab-chat-panel').style.display = 'block';
         collabFollowupHistory = [
-          { role: 'system', content: `Context:\n${activeProfessorContext}` },
+          { role: 'system', content: `You are an elite academic mentor and collaboration advisor powered by OpenAI GPT-6 Luna. Guide the researcher on strategic communication, joint research proposals, technical alignment, and academic outreach with the scholar discussed in the dossier. Base all advice strictly on the established context:\n${activeProfessorContext}` },
           { role: 'assistant', content: fullReport }
         ];
       },
@@ -2954,8 +3112,7 @@ Please generate an in-depth Collaboration Alignment Report:
   // MULTI-SOURCE VERIFIED PAPER RETRIEVAL (OpenAlex Polite Pool + ArXiv API + Semantic Scholar)
   // ZERO HALLUCINATION: All papers, DOIs, years, authors, and PDF links come directly from academic databases
   async function fetchLivePapers(query, limit = 4) {
-    const cleanQuery = query.replace(/(find|search|give me|recommend|show|look for|list|get|papers?|articles?|about|on|for|latest|recent|sota|state of the art)/gi, ' ').trim().replace(/\s+/g, ' ');
-    const targetQuery = cleanQuery.length > 2 ? cleanQuery : query;
+    const targetQuery = extractCleanTopicQuery(query);
 
     const results = [];
     const seenTitles = new Set();

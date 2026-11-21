@@ -32,8 +32,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'messages array is required.' });
     }
 
-    // Default to gpt-4o-mini for high-speed scientific generation
-    const targetModel = (model && model !== 'gpt-6-luna') ? model : 'gpt-4o-mini';
+    // Target GPT-6 Luna for premier reasoning and academic precision
+    const targetModel = model || 'gpt-6-luna';
+
+    const reqPayload = {
+      model: targetModel,
+      messages: messages,
+      stream: true
+    };
+
+    // If model is standard GPT (not luna or o-series reasoning model), use deterministic temperature
+    if (!targetModel.toLowerCase().includes('luna') && !targetModel.startsWith('o1') && !targetModel.startsWith('o3')) {
+      reqPayload.temperature = 0.2;
+    }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -41,11 +52,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: messages,
-        stream: true
-      })
+      body: JSON.stringify(reqPayload)
     });
 
     if (!response.ok) {
