@@ -1525,7 +1525,8 @@
   // ==========================================
   // GEMINI-STYLE 8-CHAT STORAGE & QUOTA SYSTEM
   // ==========================================
-  const BACKEND_URL = 'http://127.0.0.1:8000/api';
+  const isLocalEnvironment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const BACKEND_URL = isLocalEnvironment ? 'http://127.0.0.1:8000/api' : null;
   const MAX_SESSIONS = 8;
   let allChatSessions = [];
   let currentSessionId = null;
@@ -1741,8 +1742,8 @@
     list.innerHTML = '';
     activeChatHistory = [];
 
-    // If messages not loaded, fetch from backend
-    if (!session.messages || session.messages.length === 0) {
+    // If messages not loaded, fetch from backend if online
+    if (BACKEND_URL && (!session.messages || session.messages.length === 0)) {
       try {
         const resp = await fetch(`${BACKEND_URL}/sessions/${sessionId}`, {
           headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
@@ -1811,13 +1812,15 @@
     const sessionId = sessionPendingDelete;
     closeDeleteModal();
 
-    try {
-      await fetch(`${BACKEND_URL}/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
-      });
-    } catch (e) {
-      console.warn("Backend offline, deleted locally");
+    if (BACKEND_URL) {
+      try {
+        await fetch(`${BACKEND_URL}/sessions/${sessionId}`, {
+          method: 'DELETE',
+          headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+        });
+      } catch (e) {
+        // Fallback locally
+      }
     }
 
     allChatSessions = allChatSessions.filter(s => s.id !== sessionId);
@@ -1893,17 +1896,19 @@
     const newTitle = input.value.trim();
     if (newTitle && newTitle !== session.title) {
       session.title = newTitle;
-      try {
-        await fetch(`${BACKEND_URL}/sessions/${sessionId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-          },
-          body: JSON.stringify({ title: session.title })
-        });
-      } catch (e) {
-        console.warn("Backend offline, renamed locally");
+      if (BACKEND_URL) {
+        try {
+          await fetch(`${BACKEND_URL}/sessions/${sessionId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+            },
+            body: JSON.stringify({ title: session.title })
+          });
+        } catch (e) {
+          // Fallback locally
+        }
       }
       saveLocalSessionsBackup();
       if (currentSessionId === sessionId) {
@@ -1978,7 +1983,7 @@
 
   // Initialize official Google Identity Services (GSI) for real-time browser Google account detection
   async function initGoogleIdentityServices() {
-    if (!googleClientId) {
+    if (!googleClientId && BACKEND_URL) {
       try {
         const resp = await fetch(`${BACKEND_URL}/auth/config`);
         if (resp.ok) {
@@ -2001,7 +2006,7 @@
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: handleGoogleCredentialResponse,
-          auto_select: true
+          auto_select: false
         });
 
         const btnDiv = document.getElementById('google-signin-btn-container');
@@ -2019,8 +2024,10 @@
           });
         }
 
-        // Trigger Google One Tap for real-time account auto-selection
-        window.google.accounts.id.prompt();
+        // Trigger Google One Tap only if user is not already signed in
+        if (!currentUser) {
+          window.google.accounts.id.prompt();
+        }
       } catch (e) {
         console.warn('Google Identity Services notice:', e);
       }
@@ -2042,26 +2049,28 @@
       showToast(`Detected Google Account: ${realEmail}`);
 
       let authSucceeded = false;
-      try {
-        const resp = await fetch(`${BACKEND_URL}/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            credential: response.credential,
-            email: realEmail,
-            name: realName,
-            avatar_url: realAvatar
-          })
-        });
+      if (BACKEND_URL) {
+        try {
+          const resp = await fetch(`${BACKEND_URL}/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              credential: response.credential,
+              email: realEmail,
+              name: realName,
+              avatar_url: realAvatar
+            })
+          });
 
-        if (resp.ok) {
-          const data = await resp.json();
-          authToken = data.access_token;
-          currentUser = data.user;
-          authSucceeded = true;
+          if (resp.ok) {
+            const data = await resp.json();
+            authToken = data.access_token;
+            currentUser = data.user;
+            authSucceeded = true;
+          }
+        } catch (backendErr) {
+          // Fall through to client-side verification
         }
-      } catch (backendErr) {
-        console.warn("Backend auth offline, using verified Google identity client-side", backendErr);
       }
 
       if (!authSucceeded) {
@@ -2119,13 +2128,15 @@
     googleClientId = val;
     localStorage.setItem('researchai_google_client_id', googleClientId);
 
-    try {
-      await fetch(`${BACKEND_URL}/auth/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ google_client_id: googleClientId })
-      });
-    } catch (e) {}
+    if (BACKEND_URL) {
+      try {
+        await fetch(`${BACKEND_URL}/auth/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ google_client_id: googleClientId })
+        });
+      } catch (e) {}
+    }
 
     initGoogleIdentityServices();
     toggleGoogleClientConfig(false);
@@ -2209,27 +2220,36 @@
     }
     if (googleBtn) googleBtn.disabled = true;
 
-    try {
-      const resp = await fetch(`${BACKEND_URL}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          demo: true,
-          email: email,
-          name: name,
-          avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
-        })
-      });
+    if (BACKEND_URL) {
+      try {
+        const resp = await fetch(`${BACKEND_URL}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            demo: true,
+            email: email,
+            name: name,
+            avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
+          })
+        });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        authToken = data.access_token;
-        currentUser = data.user;
-      } else {
-        throw new Error("Backend authentication failed");
+        if (resp.ok) {
+          const data = await resp.json();
+          authToken = data.access_token;
+          currentUser = data.user;
+        } else {
+          throw new Error("Backend authentication failed");
+        }
+      } catch (e) {
+        currentUser = {
+          id: 'user-' + Math.random().toString(36).substring(2, 9),
+          name: name,
+          email: email,
+          avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
+        };
+        authToken = 'token-' + Date.now();
       }
-    } catch (e) {
-      console.warn("Backend auth offline or blocked, falling back to account profile", e);
+    } else {
       currentUser = {
         id: 'user-' + Math.random().toString(36).substring(2, 9),
         name: name,
@@ -2331,7 +2351,7 @@
     updateQuotaUI();
   }
 
-  // Load Sessions from Backend SQLite DB (Linked to authenticated account)
+  // Load Sessions from Backend SQLite DB (Linked to authenticated account) or Account-Scoped Storage
   async function loadSessionsFromBackend() {
     if (!authToken || !currentUser) {
       allChatSessions = [];
@@ -2339,29 +2359,7 @@
       return;
     }
 
-    try {
-      const resp = await fetch(`${BACKEND_URL}/sessions`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        allChatSessions = data.sessions || [];
-        isBackendOnline = true;
-        const ind = document.getElementById('sidebar-db-indicator');
-        if (ind) {
-          ind.innerText = 'SQLite Synced';
-          ind.style.color = '#3d9970';
-          ind.style.background = 'rgba(61,153,112,0.12)';
-        }
-        renderSidebarSessions();
-        saveLocalSessionsBackup();
-        return;
-      }
-    } catch (e) {
-      console.warn("Backend not reached, loading from account-scoped cache");
-    }
-
-    // Account-scoped local fallback if offline
+    // 1. Instant loading from account-scoped persistent storage (0ms delay)
     try {
       const accountKey = 'researchai_sessions_' + encodeURIComponent(currentUser.email);
       const saved = localStorage.getItem(accountKey);
@@ -2373,8 +2371,51 @@
     } catch (e) {
       allChatSessions = [];
     }
-
     renderSidebarSessions();
+
+    const ind = document.getElementById('sidebar-db-indicator');
+    const syncLabel = document.getElementById('sidebar-sync-label');
+
+    // 2. If running locally with backend server, sync with SQLite
+    if (BACKEND_URL) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const resp = await fetch(`${BACKEND_URL}/sessions`, {
+          headers: { 'Authorization': `Bearer ${authToken}` },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.sessions && data.sessions.length > 0) {
+            allChatSessions = data.sessions;
+            saveLocalSessionsBackup();
+            renderSidebarSessions();
+          }
+          isBackendOnline = true;
+          if (ind) {
+            ind.innerText = 'SQLite Synced';
+            ind.style.color = '#3d9970';
+            ind.style.background = 'rgba(61,153,112,0.12)';
+          }
+          if (syncLabel) syncLabel.innerText = 'Synced (SQLite)';
+          return;
+        }
+      } catch (e) {
+        // Safe silent fallback to account-scoped cache
+      }
+    }
+
+    // Default status when on web / account storage
+    if (ind) {
+      ind.innerText = 'Storage Active';
+      ind.style.color = '#3d9970';
+      ind.style.background = 'rgba(61,153,112,0.12)';
+    }
+    if (syncLabel && currentUser) {
+      syncLabel.innerText = 'Synced (Account Storage)';
+    }
   }
 
   function saveLocalSessionsBackup() {
@@ -2642,24 +2683,26 @@
         messages: []
       };
 
-      try {
-        const resp = await fetch(`${BACKEND_URL}/sessions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-          },
-          body: JSON.stringify({ title: initialTitle })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          newSession.id = data.id;
-        } else if (resp.status === 400) {
-          openQuotaModal();
-          return;
+      if (BACKEND_URL) {
+        try {
+          const resp = await fetch(`${BACKEND_URL}/sessions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+            },
+            body: JSON.stringify({ title: initialTitle })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            newSession.id = data.id;
+          } else if (resp.status === 400) {
+            openQuotaModal();
+            return;
+          }
+        } catch (e) {
+          // Gracefully persist locally
         }
-      } catch (e) {
-        console.warn("Backend offline, session saved locally");
       }
 
       allChatSessions.unshift(newSession);
@@ -2851,7 +2894,7 @@ Synthesize the foundational literature, key breakthroughs, and current state of 
             saveLocalSessionsBackup();
             renderSidebarSessions();
 
-            try {
+            if (BACKEND_URL) {
               fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
                 method: 'POST',
                 headers: {
@@ -2859,7 +2902,7 @@ Synthesize the foundational literature, key breakthroughs, and current state of 
                   ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
                 },
                 body: JSON.stringify({ role: 'user', content: text })
-              });
+              }).catch(() => {});
               fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
                 method: 'POST',
                 headers: {
@@ -2867,8 +2910,8 @@ Synthesize the foundational literature, key breakthroughs, and current state of 
                   ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
                 },
                 body: JSON.stringify({ role: 'assistant', content: fullAiResponse || 'Verified papers retrieved successfully.', sources: retrievedPapers })
-              });
-            } catch (e) {}
+              }).catch(() => {});
+            }
           }
         },
         (err) => {
@@ -2956,7 +2999,7 @@ Core Guidelines for Accuracy & Depth:
             saveLocalSessionsBackup();
             renderSidebarSessions();
 
-            try {
+            if (BACKEND_URL) {
               fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
                 method: 'POST',
                 headers: {
@@ -2964,7 +3007,7 @@ Core Guidelines for Accuracy & Depth:
                   ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
                 },
                 body: JSON.stringify({ role: 'user', content: text })
-              });
+              }).catch(() => {});
               fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
                 method: 'POST',
                 headers: {
@@ -2972,8 +3015,8 @@ Core Guidelines for Accuracy & Depth:
                   ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
                 },
                 body: JSON.stringify({ role: 'assistant', content: fullAiResponse, sources: [] })
-              });
-            } catch (e) {}
+              }).catch(() => {});
+            }
           }
         },
         (err) => {
@@ -3020,32 +3063,34 @@ Core Guidelines for Accuracy & Depth:
   // ROBUST FULL-CONTEXT PDF TEXT EXTRACTOR (pypdf Python Engine + PDF.js Engine)
   // Extracts ALL pages and ALL words with NO limits
   async function extractTextFromPdf(file) {
-    // 1. Primary Engine: Dedicated Python pypdf server (extracts 100% of pages, full context)
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
-      const res = await fetch('http://127.0.0.1:8000/api/paper/upload', {
-        method: 'POST',
-        body: form,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.text && data.text.trim().length > 30) {
-          console.log(`[pypdf] Successfully extracted ${data.pages} pages, ${data.words} words.`);
-          return {
-            text: data.text,
-            words: data.words,
-            pages: data.pages,
-            engine: 'pypdf'
-          };
+    // 1. Primary Engine: Dedicated Python pypdf server (when running locally with backend)
+    if (BACKEND_URL) {
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(`${BACKEND_URL}/paper/upload`, {
+          method: 'POST',
+          body: form,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.text && data.text.trim().length > 30) {
+            console.log(`[pypdf] Successfully extracted ${data.pages} pages, ${data.words} words.`);
+            return {
+              text: data.text,
+              words: data.words,
+              pages: data.pages,
+              engine: 'pypdf'
+            };
+          }
         }
+      } catch (pyErr) {
+        // Fallback to PDF.js engine
       }
-    } catch (pyErr) {
-      console.log("Local pypdf server not responding, falling back to PDF.js engine:", pyErr);
     }
 
     // 2. Secondary Engine: Client-Side PDF.js (extracts ALL pages, no limit)

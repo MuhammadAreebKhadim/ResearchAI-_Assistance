@@ -164,9 +164,11 @@ export default async function handler(req, res) {
   }
 
   res.setHeader('Content-Type', 'application/json');
+  const finalPapers = results.slice(0, limit);
   return res.status(200).json({
     query,
-    count: results.length,
-    results: results.slice(0, limit)
+    count: finalPapers.length,
+    results: finalPapers,
+    papers: finalPapers
   });
 }
