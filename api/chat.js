@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'messages array is required.' });
     }
 
-    // Target GPT-6 Luna for premier reasoning and academic precision
+    // Target user-selected model or default to GPT-6 Luna
     const targetModel = model || 'gpt-6-luna';
 
     const reqPayload = {
@@ -42,8 +42,14 @@ export default async function handler(req, res) {
       max_completion_tokens: 2500
     };
 
-    // If model is standard GPT (not luna or o-series reasoning model), use deterministic temperature
-    if (!targetModel.toLowerCase().includes('luna') && !targetModel.startsWith('o1') && !targetModel.startsWith('o3')) {
+    // Reasoning models (luna, gpt-5 flagship, o-series) only support default temperature
+    const isReasoningModel = targetModel.toLowerCase().includes('luna') || 
+                             targetModel.startsWith('o1') || 
+                             targetModel.startsWith('o3') || 
+                             targetModel === 'gpt-5' || 
+                             targetModel.includes('-pro');
+
+    if (!isReasoningModel) {
       reqPayload.temperature = 0.2;
     }
 

@@ -335,7 +335,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             model = body.get("model", "gpt-6-luna")
 
             req_payload = {"model": model, "messages": messages, "stream": True, "max_completion_tokens": 2500}
-            if "luna" not in model.lower() and "o1" not in model.lower() and "o3" not in model.lower():
+            is_reasoning = "luna" in model.lower() or model.startswith("o1") or model.startswith("o3") or model == "gpt-5" or "-pro" in model
+            if not is_reasoning:
                 req_payload["temperature"] = 0.2
 
             payload = json.dumps(req_payload).encode("utf-8")
