@@ -13,8 +13,9 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const query = (req.query.q || req.query.query || '').trim();
-  const limit = Math.min(parseInt(req.query.limit, 10) || 4, 10);
+  const body = (typeof req.body === 'object' && req.body) ? req.body : {};
+  const query = (req.query.q || req.query.query || body.q || body.query || '').trim();
+  const limit = Math.min(parseInt(req.query.limit || body.limit, 10) || 4, 10);
 
   if (!query) {
     return res.status(400).json({ error: 'Query parameter "q" is required.' });
