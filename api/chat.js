@@ -38,7 +38,8 @@ export default async function handler(req, res) {
     const reqPayload = {
       model: targetModel,
       messages: messages,
-      stream: true
+      stream: true,
+      max_completion_tokens: 2500
     };
 
     // If model is standard GPT (not luna or o-series reasoning model), use deterministic temperature

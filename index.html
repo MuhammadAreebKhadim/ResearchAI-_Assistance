@@ -2292,13 +2292,21 @@
       bubble.innerHTML = `<span style="color:var(--ra-accent);font-size:12px;font-weight:500;">Searching academic databases for verified papers on "<strong>${escapeHtml(targetTopic)}</strong>"... <span class="cursor-blink">▌</span></span>`;
 
       retrievedPapers = await fetchLivePapers(targetTopic, 4);
-      if (retrievedPapers.length > 0) {
-        paperCardsHtml = renderPaperCards(retrievedPapers);
-      } else {
-        paperCardsHtml = `<div style="margin-top:10px;font-size:12px;color:var(--ra-muted);">No open papers found for "${escapeHtml(targetTopic)}". You can try broader keywords.</div>`;
-      }
+      const streamId = 'ai-synthesis-stream-' + Date.now();
 
       if (retrievedPapers.length > 0) {
+        paperCardsHtml = renderPaperCards(retrievedPapers);
+        // INSTANT DISPLAY: Real papers, verified DOIs, and PDF links appear immediately within 1-2 seconds!
+        bubble.innerHTML = `
+          <div style="margin-bottom:14px;">
+            ${paperCardsHtml}
+          </div>
+          <div id="${streamId}" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--ra-border-soft);">
+            <span style="color:var(--ra-accent);font-size:12px;font-weight:500;">Synthesizing research methodologies with GPT-6 Luna... <span class="cursor-blink">▌</span></span>
+          </div>
+        `;
+        scrollArea.scrollTop = scrollArea.scrollHeight;
+
         const paperContextStr = retrievedPapers.map((p, idx) => 
           `[Verified Paper ${idx + 1}]
 Title: "${p.title}"
@@ -2309,10 +2317,10 @@ Direct PDF URL: ${p.pdfUrl || 'N/A'}
 Summary: ${p.abstract}`
         ).join('\n\n---\n\n');
 
-        systemInstruction = `You are an elite academic research assistant. The user requested published research literature and direct paper links for: "${targetTopic}".
+        systemInstruction = `You are an elite academic research assistant powered by OpenAI GPT-6 Luna. The user requested published research literature and direct paper links for: "${targetTopic}".
 
 CRITICAL ZERO-HALLUCINATION & LINK FIDELITY RULES:
-Academic repositories (OpenAlex and ArXiv) have retrieved the following real, verified papers specifically for "${targetTopic}":
+Academic repositories (OpenAlex) retrieved the following real, verified papers specifically for "${targetTopic}":
 
 ${paperContextStr}
 
@@ -2329,10 +2337,84 @@ YOUR INSTRUCTIONS:
    - Always maintain clean line breaks between Title, Authors, Core Contributions, and Verified Links.
 4. Conclude with a helpful follow-up inviting the user to explore any of these specific papers in depth in the Paper Explainer tab.`;
       } else {
+        paperCardsHtml = `<div style="margin-top:10px;font-size:12px;color:var(--ra-muted);">No open papers found for "${escapeHtml(targetTopic)}". You can try broader keywords.</div>`;
+        bubble.innerHTML = paperCardsHtml + `
+          <div id="${streamId}" style="margin-top:10px;font-size:12px;">
+            <span style="color:var(--ra-accent);font-size:12px;font-weight:500;">Consulting GPT-6 Luna for literature guidance... <span class="cursor-blink">▌</span></span>
+          </div>
+        `;
         systemInstruction = `You are an elite academic research assistant. The user has requested research papers on: "${targetTopic}".
 Direct search on open-access repositories yielded no immediate results for this specific phrasing.
 Please recommend 3-4 landmark, well-known papers in this domain that you are certain exist, or recommend more specific academic keywords to query. Remind the user to verify exact DOIs on Google Scholar or publisher databases.`;
       }
+
+      // Stream AI synthesis into stream container
+      let fullAiResponse = '';
+      await callOpenAIStream(
+        [
+          { role: 'system', content: systemInstruction },
+          ...activeChatHistory
+        ],
+        (token) => {
+          fullAiResponse += token;
+          const streamEl = document.getElementById(streamId);
+          if (streamEl) {
+            streamEl.innerHTML = formatMarkdown(fullAiResponse) + '<span class="cursor-blink">▌</span>';
+          } else {
+            bubble.innerHTML = paperCardsHtml + '<div style="margin-top:12px;">' + formatMarkdown(fullAiResponse) + '<span class="cursor-blink">▌</span></div>';
+          }
+          scrollArea.scrollTop = scrollArea.scrollHeight;
+        },
+        () => {
+          const streamEl = document.getElementById(streamId);
+          if (streamEl) {
+            streamEl.innerHTML = formatMarkdown(fullAiResponse);
+          } else {
+            bubble.innerHTML = paperCardsHtml + '<div style="margin-top:12px;">' + formatMarkdown(fullAiResponse) + '</div>';
+          }
+          activeChatHistory.push({ role: 'assistant', content: fullAiResponse });
+          scrollArea.scrollTop = scrollArea.scrollHeight;
+
+          // Persist to session memory & SQLite database
+          const targetSess = allChatSessions.find(s => s.id === currentSessionId);
+          if (targetSess) {
+            if (!targetSess.messages) targetSess.messages = [];
+            targetSess.messages.push({ role: 'user', content: text });
+            targetSess.messages.push({ role: 'assistant', content: fullAiResponse, sources: retrievedPapers });
+            targetSess.updated_at = new Date().toISOString();
+            saveLocalSessionsBackup();
+            renderSidebarSessions();
+
+            try {
+              fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({ role: 'user', content: text })
+              });
+              fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({ role: 'assistant', content: fullAiResponse, sources: retrievedPapers })
+              });
+            } catch (e) {}
+          }
+        },
+        (err) => {
+          const streamEl = document.getElementById(streamId);
+          const errBox = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:10px 14px;color:#ef4444;font-size:12px;margin-top:8px;"><strong>AI Notice:</strong> ${escapeHtml(err.message)}</div>`;
+          if (streamEl) {
+            streamEl.innerHTML = errBox;
+          } else {
+            bubble.innerHTML = paperCardsHtml + errBox;
+          }
+        }
+      );
 
     } else {
       // INTENT A: General Chatbot Mode: Understand intent, explore research area, explain concepts & gaps with deep scientific rigor
@@ -2353,27 +2435,23 @@ Core Guidelines for Accuracy & Depth:
 4. Invitation to Explore Literature:
    - Conclude your answer with a friendly invitation:
      "💡 **Ready to explore published literature?** If you'd like to dive into published papers on any of these directions, simply ask: *'Give me papers on [topic]'* or click a topic chip below, and I will fetch verified papers with real DOIs directly."`;
-    }
 
-    // Call real OpenAI GPT-6 Luna
-    let fullAiResponse = '';
+      // Call real OpenAI GPT-6 Luna
+      let fullAiResponse = '';
 
-    await callOpenAIStream(
-      [
-        { role: 'system', content: systemInstruction },
-        ...activeChatHistory
-      ],
-      (token) => {
-        fullAiResponse += token;
-        bubble.innerHTML = formatMarkdown(fullAiResponse) + '<span class="cursor-blink">▌</span>';
-        scrollArea.scrollTop = scrollArea.scrollHeight;
-      },
-      () => {
-        let extraContent = '';
-        if (isPaperDemand) {
-          extraContent = paperCardsHtml;
-        } else {
+      await callOpenAIStream(
+        [
+          { role: 'system', content: systemInstruction },
+          ...activeChatHistory
+        ],
+        (token) => {
+          fullAiResponse += token;
+          bubble.innerHTML = formatMarkdown(fullAiResponse) + '<span class="cursor-blink">▌</span>';
+          scrollArea.scrollTop = scrollArea.scrollHeight;
+        },
+        () => {
           // In exploratory mode, provide one-click topic chips to fetch papers for discussed sub-domains
+          let extraContent = '';
           const suggestedTopics = extractSuggestedTopics(fullAiResponse);
           if (suggestedTopics.length > 0) {
             extraContent = `
@@ -2390,46 +2468,46 @@ Core Guidelines for Accuracy & Depth:
               </div>
             `;
           }
-        }
-        bubble.innerHTML = formatMarkdown(fullAiResponse) + extraContent;
-        activeChatHistory.push({ role: 'assistant', content: fullAiResponse });
-        scrollArea.scrollTop = scrollArea.scrollHeight;
+          bubble.innerHTML = formatMarkdown(fullAiResponse) + extraContent;
+          activeChatHistory.push({ role: 'assistant', content: fullAiResponse });
+          scrollArea.scrollTop = scrollArea.scrollHeight;
 
-        // Persist to session memory & SQLite database
-        const targetSess = allChatSessions.find(s => s.id === currentSessionId);
-        if (targetSess) {
-          if (!targetSess.messages) targetSess.messages = [];
-          targetSess.messages.push({ role: 'user', content: text });
-          targetSess.messages.push({ role: 'assistant', content: fullAiResponse, sources: isPaperDemand ? retrievedPapers : [] });
-          targetSess.updated_at = new Date().toISOString();
-          saveLocalSessionsBackup();
-          renderSidebarSessions();
+          // Persist to session memory & SQLite database
+          const targetSess = allChatSessions.find(s => s.id === currentSessionId);
+          if (targetSess) {
+            if (!targetSess.messages) targetSess.messages = [];
+            targetSess.messages.push({ role: 'user', content: text });
+            targetSess.messages.push({ role: 'assistant', content: fullAiResponse, sources: [] });
+            targetSess.updated_at = new Date().toISOString();
+            saveLocalSessionsBackup();
+            renderSidebarSessions();
 
-          try {
-            fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-              },
-              body: JSON.stringify({ role: 'user', content: text })
-            });
-            fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-              },
-              body: JSON.stringify({ role: 'assistant', content: fullAiResponse, sources: isPaperDemand ? retrievedPapers : [] })
-            });
-          } catch (e) {}
+            try {
+              fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({ role: 'user', content: text })
+              });
+              fetch(`${BACKEND_URL}/sessions/${currentSessionId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({ role: 'assistant', content: fullAiResponse, sources: [] })
+              });
+            } catch (e) {}
+          }
+        },
+        (err) => {
+          const errBox = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;max-width:540px;margin-top:6px;color:#ef4444;font-size:12.5px;"><strong>Notice:</strong> ${escapeHtml(err.message)}</div>`;
+          bubble.innerHTML = errBox;
         }
-      },
-      (err) => {
-        const errBox = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;max-width:540px;margin-top:6px;color:#ef4444;font-size:12.5px;"><strong>Notice:</strong> ${escapeHtml(err.message)}</div>`;
-        bubble.innerHTML = errBox + paperCardsHtml;
-      }
-    );
+      );
+    }
   }
 
   // Gemini-style New Chat with strict 8-Session Quota enforcement
@@ -3125,10 +3203,13 @@ Draft a high-conversion, professional cold email ready to send:
       results.push(p);
     }
 
-    // 1. Primary Academic Engine: OpenAlex (Polite Pool via go.wolfabroad@gmail.com, zero rate limits)
+    // 1. Primary Academic Engine: OpenAlex (CORS-friendly, Polite Pool via go.wolfabroad@gmail.com, instant)
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
       const oaUrl = `https://api.openalex.org/works?search=${encodeURIComponent(targetQuery)}&per-page=${limit}&mailto=go.wolfabroad@gmail.com`;
-      const res = await fetch(oaUrl);
+      const res = await fetch(oaUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.results || [])) {
@@ -3160,6 +3241,13 @@ Draft a high-conversion, professional cold email ready to send:
       }
     } catch (e) {
       console.warn("OpenAlex fetch notice:", e.message);
+    }
+
+    // High performance optimization: if OpenAlex returned verified papers, return IMMEDIATELY! Zero delay!
+    if (results.length >= 2) {
+      retrievedPapersCache = results.slice(0, limit);
+      window.retrievedPapersCache = retrievedPapersCache;
+      return retrievedPapersCache;
     }
 
     // 2. Secondary Engine: ArXiv API (Latest preprints and direct PDF links)
@@ -3489,26 +3577,6 @@ Draft a high-conversion, professional cold email ready to send:
       </svg>
       <span>Continue with Google</span>
     </button>
-
-    <!-- Optional Google Cloud Client ID Setup for 1-Tap Browser Detection -->
-    <div style="text-align:center;margin-top:7px;">
-      <a href="#" onclick="event.preventDefault();toggleGoogleClientConfig()" id="btn-toggle-client-cfg" style="font-size:11px;color:var(--ra-muted);text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Connect Google Cloud Client ID (For 1-Tap Browser Auth)</span>
-      </a>
-    </div>
-
-    <!-- Hidden drawer for saving Google Client ID -->
-    <div id="google-client-config-drawer" style="display:none;margin-top:10px;padding:12px 14px;background:var(--ra-nav);border:1px solid var(--ra-border);border-radius:10px;font-size:12px;">
-      <div style="font-weight:600;color:var(--ra-text);margin-bottom:4px;">Auto-Detect Active Google Account</div>
-      <p style="color:var(--ra-muted);font-size:11px;line-height:1.4;margin:0 0 8px;">
-        Paste your Google Cloud Web OAuth Client ID to let Google Identity Services instantly read your browser's active Google account:
-      </p>
-      <div style="display:flex;gap:6px;">
-        <input type="text" id="cfg-google-client-id" placeholder="e.g. xxx.apps.googleusercontent.com" style="flex:1;padding:6px 10px;font-size:11.5px;border:1px solid var(--ra-border);border-radius:7px;background:var(--ra-surface);color:var(--ra-text);outline:none;">
-        <button type="button" onclick="saveGoogleClientId()" class="btn-primary" style="padding:6px 12px;font-size:11.5px;border-radius:7px;white-space:nowrap;">Save & Connect</button>
-      </div>
-    </div>
 
     <!-- Sleek Divider -->
     <div style="display:flex;align-items:center;margin:18px 0;gap:12px;">

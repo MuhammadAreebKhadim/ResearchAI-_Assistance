@@ -334,7 +334,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             messages = body.get("messages", [])
             model = body.get("model", "gpt-6-luna")
 
-            req_payload = {"model": model, "messages": messages, "stream": True}
+            req_payload = {"model": model, "messages": messages, "stream": True, "max_completion_tokens": 2500}
             if "luna" not in model.lower() and "o1" not in model.lower() and "o3" not in model.lower():
                 req_payload["temperature"] = 0.2
 
