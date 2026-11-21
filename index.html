@@ -717,9 +717,9 @@
             <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.6);"></span>
             <select class="model-selector-select" onchange="setActiveModel(this.value)" style="background:transparent;border:none;outline:none;font-size:12px;font-weight:600;color:var(--ra-text);cursor:pointer;padding:2px 0;">
               <option value="gpt-6-luna">GPT-6 Luna (Deep Reasoning)</option>
+              <option value="gpt-5.5-pro">GPT-5.5 Pro (Frontier Reasoning)</option>
+              <option value="gpt-5-pro">GPT-5 Pro (Deep Research Synthesis)</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini (Ultra-Fast · Long Context)</option>
-              <option value="gpt-5">GPT-5 (Frontier Flagship)</option>
-              <option value="gpt-5-mini">GPT-5 Mini (Fast & Efficient)</option>
               <option value="gpt-4o">GPT-4o (Omni Multimodal)</option>
             </select>
           </div>
@@ -750,9 +750,9 @@
           <div style="display:flex;align-items:center;gap:6px;">
             <select class="model-selector-select" onchange="setActiveModel(this.value)" style="background:var(--ra-nav);border:1px solid var(--ra-border);border-radius:8px;font-size:11.5px;font-weight:600;color:var(--ra-text);padding:5px 8px;cursor:pointer;outline:none;" title="Switch AI Model">
               <option value="gpt-6-luna">GPT-6 Luna (Reasoning)</option>
+              <option value="gpt-5.5-pro">GPT-5.5 Pro (Frontier Reasoning)</option>
+              <option value="gpt-5-pro">GPT-5 Pro (Deep Synthesis)</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini (Fast · Long Context)</option>
-              <option value="gpt-5">GPT-5 (Flagship)</option>
-              <option value="gpt-5-mini">GPT-5 Mini (Fast)</option>
               <option value="gpt-4o">GPT-4o (Omni)</option>
             </select>
             <button type="button" onclick="triggerPaperSearchFromCenter()" class="btn-outline" style="padding:6px 11px;font-size:12px;display:flex;align-items:center;gap:5px;border-radius:10px;white-space:nowrap;" title="Fetch verified academic papers directly">
@@ -813,9 +813,9 @@
             <div style="display:flex;align-items:center;gap:6px;">
               <select class="model-selector-select" onchange="setActiveModel(this.value)" style="background:var(--ra-nav);border:1px solid var(--ra-border);border-radius:8px;font-size:11px;font-weight:600;color:var(--ra-text);padding:4px 7px;cursor:pointer;outline:none;" title="Switch AI Model">
                 <option value="gpt-6-luna">GPT-6 Luna (Reasoning)</option>
+                <option value="gpt-5.5-pro">GPT-5.5 Pro (Frontier Reasoning)</option>
+                <option value="gpt-5-pro">GPT-5 Pro (Deep Synthesis)</option>
                 <option value="gpt-5.4-mini">GPT-5.4 Mini (Fast · Long Context)</option>
-                <option value="gpt-5">GPT-5 (Flagship)</option>
-                <option value="gpt-5-mini">GPT-5 Mini (Fast)</option>
                 <option value="gpt-4o">GPT-4o (Omni)</option>
               </select>
               <button type="button" onclick="triggerPaperSearchFromBottom()" class="btn-outline" style="padding:5px 9px;font-size:11px;display:flex;align-items:center;gap:4px;border-radius:8px;white-space:nowrap;" title="Fetch verified academic papers on this domain">
@@ -1152,10 +1152,10 @@
 
   function getActiveModelDisplayName() {
     const names = {
-      'gpt-6-luna': 'GPT-6 Luna (Reasoning)',
+      'gpt-6-luna': 'GPT-6 Luna (Deep Reasoning)',
+      'gpt-5.5-pro': 'GPT-5.5 Pro (Frontier Reasoning)',
+      'gpt-5-pro': 'GPT-5 Pro (Deep Research Synthesis)',
       'gpt-5.4-mini': 'GPT-5.4 Mini (Fast · Long Context)',
-      'gpt-5': 'GPT-5 (Frontier Flagship)',
-      'gpt-5-mini': 'GPT-5 Mini (Fast & Efficient)',
       'gpt-4o': 'GPT-4o (Omni Multimodal)'
     };
     return names[activeModel] || activeModel;

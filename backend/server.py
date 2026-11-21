@@ -318,7 +318,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     pass
             return self.send_json(200, {"success": True, "google_client_id": os.environ.get("GOOGLE_CLIENT_ID", "")})
 
-        # Google OAuth Login / Real User Sign-in
+        # Real LLM Chat Stream Endpoint
         if path == "/api/chat":
             api_key = os.environ.get("OPENAI_API_KEY", "")
             if not api_key:
@@ -333,42 +333,82 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
             messages = body.get("messages", [])
             model = body.get("model", "gpt-6-luna")
+            is_pro = "-pro" in model.lower()
 
-            req_payload = {"model": model, "messages": messages, "stream": True, "max_completion_tokens": 2500}
-            is_reasoning = "luna" in model.lower() or model.startswith("o1") or model.startswith("o3") or model == "gpt-5" or "-pro" in model
-            if not is_reasoning:
-                req_payload["temperature"] = 0.2
-
-            payload = json.dumps(req_payload).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api.openai.com/v1/chat/completions",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                },
-                method="POST"
-            )
             try:
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-                    self.send_header("Cache-Control", "no-cache")
-                    self.send_header("Connection", "keep-alive")
-                    self.send_header("Access-Control-Allow-Origin", "*")
-                    self.end_headers()
-                    while True:
-                        chunk = resp.read(1024)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                if is_pro:
+                    # Pro models (gpt-5.5-pro, gpt-5-pro) use v1/responses endpoint
+                    req_payload = {"model": model, "input": messages, "stream": True}
+                    req = urllib.request.Request(
+                        "https://api.openai.com/v1/responses",
+                        data=json.dumps(req_payload).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        for line in resp:
+                            l = line.decode("utf-8").strip()
+                            if l.startswith("data: "):
+                                json_str = l[6:].strip()
+                                if not json_str or json_str == "[DONE]":
+                                    continue
+                                try:
+                                    event = json.loads(json_str)
+                                    if event.get("type") == "response.output_text.delta" and event.get("delta"):
+                                        chunk = {"choices": [{"delta": {"content": event["delta"]}}]}
+                                        self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode("utf-8"))
+                                        self.wfile.flush()
+                                    elif event.get("type") == "response.completed":
+                                        self.wfile.write(b"data: [DONE]\n\n")
+                                        self.wfile.flush()
+                                except Exception:
+                                    pass
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                else:
+                    # Standard chat completions (gpt-6-luna, gpt-5.4-mini, gpt-4o, etc.)
+                    req_payload = {"model": model, "messages": messages, "stream": True, "max_completion_tokens": 2500}
+                    is_reasoning = "luna" in model.lower() or "gpt-5" in model.lower() or model.startswith("o1") or model.startswith("o3")
+                    if not is_reasoning:
+                        req_payload["temperature"] = 0.2
+
+                    payload = json.dumps(req_payload).encode("utf-8")
+                    req = urllib.request.Request(
+                        "https://api.openai.com/v1/chat/completions",
+                        data=payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        while True:
+                            chunk = resp.read(1024)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
                 return
             except urllib.error.HTTPError as e:
                 err_text = e.read().decode("utf-8")
-                return self.send_error_json(e.code, err_text)
+                self.wfile.write(f"data: {json.dumps({'error': err_text})}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                return
             except Exception as e:
-                return self.send_error_json(500, str(e))
+                self.wfile.write(f"data: {json.dumps({'error': str(e)})}\n\n".encode("utf-8"))
+                self.wfile.flush()
+                return
 
         # Google OAuth Login / Real User Sign-in
         if path == "/api/auth/google":
