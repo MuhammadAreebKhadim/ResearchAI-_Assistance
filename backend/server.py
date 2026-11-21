@@ -205,6 +205,78 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 return self.send_error_json(401, "Not authenticated")
             return self.send_json(200, {"user": user})
 
+        # Academic Papers Search Endpoint (Bypasses Browser CORS)
+        if path == "/api/papers":
+            qs = urllib.parse.parse_qs(parsed.query)
+            q = qs.get("q", [""])[0].strip()
+            limit = min(int(qs.get("limit", [4])[0]), 10)
+            if not q:
+                return self.send_error_json(400, "q query parameter required")
+            
+            papers = []
+            seen = set()
+            try:
+                arxiv_url = f"https://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(q)}&start=0&max_results={limit}"
+                req = urllib.request.Request(arxiv_url, headers={"User-Agent": "ResearchAI/2.0"})
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    xml = resp.read().decode("utf-8")
+                    for e in xml.split("<entry>")[1:]:
+                        title = e.split("<title>")[1].split("</title>")[0].strip().replace("\n", " ")
+                        id_val = e.split("<id>")[1].split("</id>")[0].strip()
+                        pub = e.split("<published>")[1].split("</published>")[0][:4] if "<published>" in e else "Recent"
+                        summary = e.split("<summary>")[1].split("</summary>")[0].strip().replace("\n", " ") if "<summary>" in e else ""
+                        authors = []
+                        for am in e.split("<author>")[1:]:
+                            if "<name>" in am:
+                                authors.append(am.split("<name>")[1].split("</name>")[0].strip())
+                        pdf_url = id_val.replace("/abs/", "/pdf/") + ".pdf" if id_val else None
+                        norm = "".join(c for c in title.lower() if c.isalnum())
+                        if norm not in seen:
+                            seen.add(norm)
+                            papers.append({
+                                "title": title,
+                                "authors": ", ".join(authors[:3]) or "Academic Authors",
+                                "year": pub,
+                                "citations": 0,
+                                "venue": "arXiv Preprint Server",
+                                "abstract": summary,
+                                "url": id_val,
+                                "pdfUrl": pdf_url,
+                                "source": "arXiv"
+                            })
+            except Exception as e:
+                sys.stderr.write(f"Server ArXiv error: {e}\n")
+            
+            if len(papers) < limit:
+                try:
+                    oa_url = f"https://api.openalex.org/works?search={urllib.parse.quote(q)}&per-page={limit}&mailto=go.wolfabroad@gmail.com"
+                    req = urllib.request.Request(oa_url, headers={"User-Agent": "ResearchAI/2.0"})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        d = json.loads(resp.read().decode("utf-8"))
+                        for item in d.get("results", []):
+                            title = item.get("display_name", "")
+                            norm = "".join(c for c in title.lower() if c.isalnum())
+                            if norm not in seen:
+                                seen.add(norm)
+                                authors = ", ".join([a.get("author", {}).get("display_name", "") for a in item.get("authorships", [])[:3]])
+                                doi = item.get("doi") or (item.get("primary_location") or {}).get("landing_page_url")
+                                pdf = (item.get("open_access") or {}).get("oa_url") or (item.get("primary_location") or {}).get("pdf_url")
+                                papers.append({
+                                    "title": title,
+                                    "authors": authors or "Academic Authors",
+                                    "year": item.get("publication_year") or "Recent",
+                                    "citations": item.get("cited_by_count", 0),
+                                    "venue": ((item.get("primary_location") or {}).get("source") or {}).get("display_name") or "Peer-Reviewed Journal",
+                                    "abstract": "Abstract available via publisher DOI.",
+                                    "url": doi or f"https://scholar.google.com/scholar?q={urllib.parse.quote(title)}",
+                                    "pdfUrl": pdf,
+                                    "source": "OpenAlex"
+                                })
+                except Exception as e:
+                    sys.stderr.write(f"Server OpenAlex error: {e}\n")
+
+            return self.send_json(200, {"query": q, "count": len(papers), "results": papers[:limit]})
+
         # List Chat Sessions
         if path == "/api/sessions":
             user = self.get_auth_user()
