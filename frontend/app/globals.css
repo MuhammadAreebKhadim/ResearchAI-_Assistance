@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #f8f7f4;
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-nav: #f1efe9;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-soft: #eef2ff;
+  --color-text-primary: #1e1e2d;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-border: #e5e3dc;
+  --color-border-soft: #f0ede6;
+}
+
+.dark {
+  --color-bg: #0f1117;
+  --color-surface: #181b26;
+  --color-card: #1e2230;
+  --color-nav: #181b26;
+  --color-accent: #818cf8;
+  --color-accent-hover: #6366f1;
+  --color-accent-soft: rgba(99, 102, 241, 0.12);
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #2a3045;
+  --color-border-soft: #1e2230;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-geist), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+}
+
+/* Chat message prose */
+.prose-chat p {
+  margin-bottom: 0.75rem;
+}
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+.prose-chat strong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+.prose-chat li {
+  margin-bottom: 0.25rem;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3 {
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-primary);
+}
