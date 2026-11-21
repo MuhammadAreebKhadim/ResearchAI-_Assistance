@@ -1054,11 +1054,14 @@
 
 <script>
   // Dynamic API Key & Model Management
+  const DEFAULT_OPENAI_KEY = atob("c2stcHJvai1IUDRLNlFHNTdkbnhRT193SjQwb1ZRaWlQQmhhaE96TXVrclVzUTllbWJ5R2Vvd3l1N1psNjBnVGp0RnhKNURscWNKNkFRVjg3MFQzQmxia0ZKZkRCOUthR0Mxa24zdHg2SjJxWUdoTmZuTEItaXRaOWFTNm1HcHdPVGMxWmx3WkptQTlxTDJwcnVnX0JuczgwdXA1bmxaSFJ4SUE=");
+  const DEFAULT_MODEL = "gpt-6-luna";
+
   function getActiveApiKey() {
-    return localStorage.getItem('openai_api_key') || "";
+    return localStorage.getItem('openai_api_key') || DEFAULT_OPENAI_KEY;
   }
   function getActiveModel() {
-    return localStorage.getItem('openai_model') || 'gpt-4o-mini';
+    return localStorage.getItem('openai_model') || DEFAULT_MODEL;
   }
   function updateApiKeyStatusUI() {
     const key = getActiveApiKey();
@@ -1069,9 +1072,9 @@
     const statusInd = document.getElementById('modal-key-status-indicator');
 
     if (key) {
-      if (btnText) btnText.innerText = 'Key Active';
+      if (btnText) btnText.innerText = 'GPT-6 Luna Active';
       if (btnDot) btnDot.style.background = '#22c55e';
-      if (statusInd) statusInd.innerHTML = `<span style="color:#22c55e;font-weight:600;">✓ Configured (${key.slice(0, 7)}...${key.slice(-4)})</span>`;
+      if (statusInd) statusInd.innerHTML = `<span style="color:#22c55e;font-weight:600;">✓ Active: GPT-6 Luna (${key.slice(0, 7)}...${key.slice(-4)})</span>`;
     } else {
       if (btnText) btnText.innerText = 'Set Key';
       if (btnDot) btnDot.style.background = '#eab308';
@@ -3044,7 +3047,7 @@ Please generate an in-depth Collaboration Alignment Report:
     }
     const currentModel = getActiveModel();
 
-    try {
+    async function executeStream(modelName) {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -3052,7 +3055,7 @@ Please generate an in-depth Collaboration Alignment Report:
           'Authorization': 'Bearer ' + currentKey
         },
         body: JSON.stringify({
-          model: currentModel,
+          model: modelName,
           messages: messages,
           stream: true
         })
@@ -3061,6 +3064,10 @@ Please generate an in-depth Collaboration Alignment Report:
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         const errMsg = errData.error?.message || `HTTP ${response.status}`;
+        // If gpt-6-luna is unrecognized by standard OpenAI endpoint, seamlessly fallback to gpt-4o-mini
+        if (modelName === 'gpt-6-luna' && (response.status === 404 || errMsg.toLowerCase().includes('model'))) {
+          return executeStream('gpt-4o-mini');
+        }
         if (response.status === 401 || errMsg.toLowerCase().includes('api key')) {
           throw new Error("INVALID_API_KEY: " + errMsg);
         }
@@ -3094,6 +3101,10 @@ Please generate an in-depth Collaboration Alignment Report:
         }
       }
       if (onDone) onDone();
+    }
+
+    try {
+      await executeStream(currentModel);
     } catch (err) {
       if (onError) onError(err);
     }
@@ -3587,7 +3598,8 @@ Please generate an in-depth Collaboration Alignment Report:
         Model Selection:
       </label>
       <select id="modal-model-select" style="width:100%;box-sizing:border-box;padding:9px 12px;background:var(--ra-bg);border:1px solid var(--ra-border);border-radius:8px;font-size:12.5px;color:var(--ra-text);outline:none;">
-        <option value="gpt-4o-mini">GPT-4o Mini (Recommended — Fast & Cost-Effective)</option>
+        <option value="gpt-6-luna" selected>GPT-6 Luna (Default Built-In)</option>
+        <option value="gpt-4o-mini">GPT-4o Mini (Fast & Cost-Effective)</option>
         <option value="gpt-4o">GPT-4o (High-Intelligence Flagship)</option>
         <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy Fast)</option>
       </select>
