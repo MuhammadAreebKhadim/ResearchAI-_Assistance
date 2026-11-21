@@ -2518,7 +2518,7 @@ Synthesize the foundational literature, key breakthroughs, and current state of 
 
     } else {
       // INTENT A: General Chatbot Mode: Understand intent, explore research area, explain concepts & gaps with deep scientific rigor
-      systemInstruction = `You are an elite academic research advisor, principal investigator, and domain expert powered by OpenAI GPT-6 Luna.
+      systemInstruction = `You are an elite academic research advisor, principal investigator, and domain expert powered by OpenAI ${getActiveModelDisplayName()}.
 Your mission is to understand the researcher's intent with utmost precision, provide mathematically and scientifically rigorous explanations, and guide them in formulating sharp, publication-grade research questions and methodologies.
 
 Core Guidelines for Accuracy & Depth:
@@ -2831,7 +2831,7 @@ Core Guidelines for Accuracy & Depth:
     resultBox.style.display = 'block';
     resultBox.scrollIntoView({ behavior: 'smooth' });
 
-    const paperSystemPrompt = `You are a premier senior peer reviewer and principal investigator for top-tier scientific venues (Nature, Science, NeurIPS, ICML, IEEE TPAMI) powered by OpenAI GPT-6 Luna.
+    const paperSystemPrompt = `You are a premier senior peer reviewer and principal investigator for top-tier scientific venues (Nature, Science, NeurIPS, ICML, IEEE TPAMI) powered by OpenAI ${getActiveModelDisplayName()}.
 Your core mission is ABSOLUTE FIDELITY, RIGOROUS ACCURACY, and GROUNDED SCIENTIFIC TRUTH to the provided research document.
 
 STRICT GROUNDING & ZERO-HALLUCINATION RULES:
@@ -3105,7 +3105,7 @@ USER'S RESEARCH BACKGROUND:
 ${userSummary}
     `.trim();
 
-    const collabSystemPrompt = `You are a distinguished Dean of Graduate Studies, principal investigator, and academic partnership director powered by OpenAI GPT-6 Luna.
+    const collabSystemPrompt = `You are a distinguished Dean of Graduate Studies, principal investigator, and academic partnership director powered by OpenAI ${getActiveModelDisplayName()}.
 Your mandate is to provide an objective, scientifically rigorous, and deeply aligned collaboration assessment between a candidate researcher and a target scholar.
 
 CORE PRINCIPLES:
@@ -3169,7 +3169,7 @@ Draft a high-conversion, professional cold email ready to send:
         // Show interactive collaboration chat
         document.getElementById('collab-chat-panel').style.display = 'block';
         collabFollowupHistory = [
-          { role: 'system', content: `You are an elite academic mentor and collaboration advisor powered by OpenAI GPT-6 Luna. Guide the researcher on strategic communication, joint research proposals, technical alignment, and academic outreach with the scholar discussed in the dossier. Base all advice strictly on the established context:\n${activeProfessorContext}` },
+          { role: 'system', content: `You are an elite academic mentor and collaboration advisor powered by OpenAI ${getActiveModelDisplayName()}. Guide the researcher on strategic communication, joint research proposals, technical alignment, and academic outreach with the scholar discussed in the dossier. Base all advice strictly on the established context:\n${activeProfessorContext}` },
           { role: 'assistant', content: fullReport }
         ];
       },
