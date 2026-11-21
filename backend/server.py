@@ -319,6 +319,55 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"success": True, "google_client_id": os.environ.get("GOOGLE_CLIENT_ID", "")})
 
         # Google OAuth Login / Real User Sign-in
+        if path == "/api/chat":
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            if not api_key:
+                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+                if os.path.exists(env_path):
+                    with open(env_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if line.startswith("OPENAI_API_KEY="):
+                                api_key = line.strip().split("=", 1)[1].strip('"\'')
+            if not api_key:
+                return self.send_error_json(500, "OPENAI_API_KEY is not configured on server")
+
+            messages = body.get("messages", [])
+            model = body.get("model", "gpt-4o-mini")
+            if model == "gpt-6-luna":
+                model = "gpt-4o-mini"
+
+            payload = json.dumps({"model": model, "messages": messages, "stream": True}).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
+                method="POST"
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    while True:
+                        chunk = resp.read(1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                return
+            except urllib.error.HTTPError as e:
+                err_text = e.read().decode("utf-8")
+                return self.send_error_json(e.code, err_text)
+            except Exception as e:
+                return self.send_error_json(500, str(e))
+
+        # Google OAuth Login / Real User Sign-in
         if path == "/api/auth/google":
             credential = body.get("credential", "")
             user_info = None
