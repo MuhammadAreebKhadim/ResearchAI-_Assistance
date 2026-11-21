@@ -2220,27 +2220,37 @@
     }
     if (googleBtn) googleBtn.disabled = true;
 
-    if (BACKEND_URL) {
-      try {
-        const resp = await fetch(`${BACKEND_URL}/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            demo: true,
-            email: email,
-            name: name,
-            avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
-          })
-        });
+    try {
+      if (BACKEND_URL) {
+        try {
+          const resp = await fetch(`${BACKEND_URL}/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              demo: true,
+              email: email,
+              name: name,
+              avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
+            })
+          });
 
-        if (resp.ok) {
-          const data = await resp.json();
-          authToken = data.access_token;
-          currentUser = data.user;
-        } else {
-          throw new Error("Backend authentication failed");
+          if (resp.ok) {
+            const data = await resp.json();
+            authToken = data.access_token;
+            currentUser = data.user;
+          } else {
+            throw new Error("Backend authentication failed");
+          }
+        } catch (e) {
+          currentUser = {
+            id: 'user-' + Math.random().toString(36).substring(2, 9),
+            name: name,
+            email: email,
+            avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
+          };
+          authToken = 'token-' + Date.now();
         }
-      } catch (e) {
+      } else {
         currentUser = {
           id: 'user-' + Math.random().toString(36).substring(2, 9),
           name: name,
@@ -2249,14 +2259,6 @@
         };
         authToken = 'token-' + Date.now();
       }
-    } else {
-      currentUser = {
-        id: 'user-' + Math.random().toString(36).substring(2, 9),
-        name: name,
-        email: email,
-        avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`
-      };
-      authToken = 'token-' + Date.now();
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
